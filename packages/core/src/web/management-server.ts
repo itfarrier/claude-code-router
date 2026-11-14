@@ -457,6 +457,7 @@ const rpcHandlers: Record<string, RpcHandler> = {
     }
     invalidateProviderAccountSnapshotCache();
     syncProviderModelAutoRefresh(savedConfig);
+    startClassSwitch(savedConfig);
     return savedConfig;
   },
   scanBotHandoffBluetoothTargets: () => scanBotHandoffBluetoothTargets(),
