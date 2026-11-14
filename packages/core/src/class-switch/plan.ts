@@ -147,8 +147,13 @@ function hasLiveCredential(provider: GatewayProviderConfig, row: ShelfRow): bool
   if (credentials.length === 0) {
     return !isBenched(row.provider, row.model);
   }
-  return credentials.some((credential, index) => {
-    const slug = providerCredentialSlug(providerCredentialRuntimeId(provider, credential, index));
+  return credentials.some((credential) => {
+    // Omit the index argument: providerCredentialRuntimeId then resolves the
+    // configured index via provider.credentials.indexOf, which is the same
+    // slug the executor filters and the bench records. The filtered active
+    // list skips disabled and keyless credentials, so its own index is not
+    // the configured one.
+    const slug = providerCredentialSlug(providerCredentialRuntimeId(provider, credential));
     return !isBenched(row.provider, row.model, slug);
   });
 }
@@ -289,9 +294,8 @@ function buildAttempts(
     if (!hasLiveCredential(provider, row)) {
       continue;
     }
-    for (let index = 0; index < credentials.length; index += 1) {
-      const credential = credentials[index]!;
-      const slug = providerCredentialSlug(providerCredentialRuntimeId(provider, credential, index));
+    for (const credential of credentials) {
+      const slug = providerCredentialSlug(providerCredentialRuntimeId(provider, credential));
       if (isBenched(row.provider, row.model, slug)) {
         continue;
       }
@@ -332,8 +336,8 @@ function toolTurnAttempt(
     return undefined;
   }
   const credentials = activeProviderCredentials(target.provider);
-  const match = credentials.find((credential, index) => {
-    const runtimeId = providerCredentialRuntimeId(target.provider, credential, index);
+  const match = credentials.find((credential) => {
+    const runtimeId = providerCredentialRuntimeId(target.provider, credential);
     const slug = providerCredentialSlug(runtimeId);
     return runtimeId === triple.credentialId || slug === triple.credentialId;
   });

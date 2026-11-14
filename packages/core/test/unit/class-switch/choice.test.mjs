@@ -482,6 +482,38 @@ test("one parked credential keeps the model live for the other credential", asyn
   });
 });
 
+test("a parked slug for a shifted credential keeps the row out of the plan", async () => {
+  await withShelfDataDir(async () => {
+    resetGatewayBench();
+    await writeShelfSnapshot({
+      excluded: [],
+      review: [],
+      shelves: {
+        ...emptyShelves(),
+        opus: [{ model: "alpha/model-a", provider: "BenchProvider", score: 80 }]
+      },
+      updatedAt: new Date().toISOString()
+    });
+    const shiftedRegistry = new ModelRegistry({
+      Providers: [
+        {
+          credentials: [{ api_key: "sk-one", enabled: false }, { api_key: "sk-two" }],
+          models: ["alpha/model-a"],
+          name: "BenchProvider"
+        }
+      ],
+      virtualModelProfiles: []
+    });
+    // The live credential sits at configured index 1, so the executor and the
+    // bench both know it as key-2.
+    await recordClassRefusal(429, "BenchProvider", "alpha/model-a", "key-2", new Headers({ "retry-after": "60" }));
+    assert.equal(isBenched("BenchProvider", "alpha/model-a", "key-2"), true);
+    const attempts = attemptsForClass(parseClassRequest("claude-opus-4-6"), shiftedRegistry, opusScalars());
+    assert.equal(attempts, undefined);
+    resetGatewayBench();
+  });
+});
+
 test("toolTurn true returns the remembered row", async () => {
   await withShelfDataDir(async () => {
     remember("sess-tool", { credentialId: "cred:second", model: "alpha/model-a", provider: "BenchProvider" });
