@@ -556,20 +556,26 @@ export async function fetchUpstreamWithFallback(input: {
       if (classLive) {
         const modelParts = classAttemptModelParts(attempt);
         if (response.ok) {
-          if (sessionId && modelParts && attempt.credentialIds?.[0]) {
+          if (modelParts && attempt.credentialIds?.[0]) {
             const durationMs = Date.now() - attemptStartedAt;
             const headerRecord = Object.fromEntries(response.headers.entries());
+            // Every class 2xx updates the bench — parks are cleared,
+            // confirmations and zero-remaining parks are stored — whether or
+            // not the request carried a session. Only the tool-turn memory
+            // needs a session id.
             await recordClassSuccess(
               modelParts.provider,
               modelParts.model,
               attempt.credentialIds[0],
               { durationMs, headers: headerRecord }
             );
-            remember(sessionId, {
-              credentialId: attempt.credentialIds[0],
-              model: modelParts.model,
-              provider: modelParts.provider
-            });
+            if (sessionId) {
+              remember(sessionId, {
+                credentialId: attempt.credentialIds[0],
+                model: modelParts.model,
+                provider: modelParts.provider
+              });
+            }
           }
           discardLastClassFailure();
           input.trace?.capture({
