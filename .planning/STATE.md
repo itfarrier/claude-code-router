@@ -3,8 +3,8 @@ gsd_state_version: "1.0"
 milestone: v1.0
 milestone_name: Automatic class switch
 status: planning
-last_updated: "2026-11-14T16:35:00.000Z"
-last_activity: 2026-11-14 — Phase 1 plan 03 revised for the shelf window and the review snapshot
+last_updated: "2026-11-14T16:50:00.000Z"
+last_activity: 2026-11-14 — Phase 1 plan 03 revised so the catalog RED commit exports compiling stubs
 progress:
   total_phases: 3
   completed_phases: 0
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 Phase: 1 of 3 (Shelves)
 Plan: — of 3
 Status: Ready to execute
-Last activity: 2026-11-14 — Phase 1 plan 03 revised: seeded and kept shelf rows store the Pattern 6 window, and refresh asserts snapshot.review
+Last activity: 2026-11-14 — Phase 1 plan 03 revised: the catalog RED commit exports compiling stubs so the named test fails on the stored-window assertion
 
 Progress: [░░░░░░░░░░] 0%
 
