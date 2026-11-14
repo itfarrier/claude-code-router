@@ -39,7 +39,7 @@ Claude Code orders a class. CCR serves the strongest live model in that class, a
 
 ### Out of Scope
 
-- A second gateway or a full rewrite of the router — the insertion point is the existing attempt loop and credential pool
+- A second gateway or a rewrite of the request loop or `credential-pool.ts` — new code lives in `packages/core/src/class-switch/`. Parent files get only the calls in `.planning/research/FORK-SEAMS.md`
 - A side policy file that only picks the first model — it cannot rotate tokens or step down after a refusal
 - One provider entry per token (`cursor` and `cursor2`) — tokens stay on one provider
 - Hard-coded requests-per-minute tables for free models — read the headers and error fields of that response
@@ -50,7 +50,7 @@ Claude Code orders a class. CCR serves the strongest live model in that class, a
 
 ## Context
 
-This milestone comes from Cursor chat `9cf95ff9-5d84-4b2b-adf4-165be1f6ff9b`. The locked rules are in `.planning/research/IMPORTED-DESIGN.md`. Domain research was not run again. The chat already compared this fork, freellm, and zerogateway, and it reviewed the parent GitHub issues and pull requests.
+This milestone comes from Cursor chat `9cf95ff9-5d84-4b2b-adf4-165be1f6ff9b`. The locked product rules are in `.planning/research/IMPORTED-DESIGN.md`. The locked way to place that code, so this fork can take updates from `musistudio/claude-code-router`, is in `.planning/research/FORK-SEAMS.md`. Domain research was not run again. The chat already compared this fork, freellm, and zerogateway, and it reviewed the parent GitHub issues and pull requests.
 
 The product version on `package.json` is 3.1.3. That is not the GSD milestone version. This is the first GSD milestone, so it is v1.0.
 
@@ -67,8 +67,8 @@ Config mode is `yolo`. Granularity is `coarse`. Phase numbers start at 1 because
 
 ## Constraints
 
-- **Codebase**: Add the dynamic attempt list inside `execution-plan.ts` and take tokens from `credential-pool.ts`. Do not add a second router.
-- **Parent**: The git parent is `musistudio/claude-code-router`. Keep the change small enough to merge later.
+- **Codebase**: Put class, score, bench, catalog, and notice code in `packages/core/src/class-switch/`. Touch a parent file only through a seam in `.planning/research/FORK-SEAMS.md`. Leave `credential-pool.ts`, `profiles/service.ts`, and `config.ts` unchanged.
+- **Parent**: The git parent is `musistudio/claude-code-router`. Merge by taking the parent's request loop whole. `CCR_CLASS_SWITCH=0` must match parent behavior.
 - **Runtime**: Node `>=22`. Domain code stays in `packages/core`. The UI talks only through `window.ccr`.
 - **Claude identity**: The response body keeps the model name Claude sent. The picker in Claude still shows that name.
 - **Policy input**: Model name, tool list, and whether the request has an image. Not the message body.
@@ -80,9 +80,9 @@ Config mode is `yolo`. Granularity is `coarse`. Phase numbers start at 1 because
 |----------|-----------|---------|
 | Four classes: Fable, Opus, Sonnet, Haiku | They match Claude Code aliases. The user confirmed this split. | — Pending |
 | Score weights 0.50 / 0.30 / 0.20 and cuts 62 / 50 / 28 | Locked in the imported chat. Coding index, then agentic index, then intelligence index, from OpenRouter `benchmarks.artificial_analysis`. | — Pending |
-| Dynamic attempts, not `fallback.models` | The static list cannot be recomputed from score and bench. The existing loop is the place to insert the dynamic list. | — Pending |
+| Dynamic attempt list at the end of `createRouteExecutionPlan`, not a second loop | The parent `fetchUpstreamWithFallback` already walks `attempts`. A class request replaces that list. Other requests keep `off`, `retry`, and `model-chain`. See `.planning/research/FORK-SEAMS.md`. | — Pending |
 | Provider reset time, not a fixed 15-minute probe or a 1-day park | The user rejected fixed probe and park timers. Catalog refresh stays at 10 minutes. | — Pending |
-| Stay on this fork | A side policy file cannot rotate tokens or step down after a refusal. | — Pending |
+| Stay on this fork, code in `packages/core/src/class-switch/` | A side `CUSTOM_ROUTER_PATH` file cannot rotate tokens or step down after a refusal. Editing the parent loop in place makes every upstream merge a rewrite. | — Pending |
 | Skip a second research pass | Chat `9cf95ff9-5d84-4b2b-adf4-165be1f6ff9b` is the locked design. | ✓ Good |
 
 ## Evolution
@@ -103,4 +103,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-14 after milestone v1.0 start*
+*Last updated: 2026-11-14 after the fork-seam design*
