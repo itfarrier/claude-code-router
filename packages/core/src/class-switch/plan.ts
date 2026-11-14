@@ -1,3 +1,4 @@
+import { isBenched } from "@ccr/core/class-switch/bench";
 import {
   readShelfSnapshot,
   type ShelfClass,
@@ -128,6 +129,7 @@ export function attemptsForClass(
   }
   const rows = [...snapshot.shelves[parsed.shelfClass]]
     .filter((row) => rowPassesOneMillionFilter(row, parsed.requireOneMillion))
+    .filter((row) => !isBenched(row.provider, row.model))
     .sort(compareShelfRows);
   const attempts: RouteAttemptPlan[] = [];
   for (const row of rows) {
