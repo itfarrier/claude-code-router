@@ -400,7 +400,11 @@ export async function fetchUpstreamWithFallback(input: {
     let cachedAttemptRouting = attemptRoutingCache.get(plannedAttempt.model);
     if (!cachedAttemptRouting) {
       const routedHeaders = { ...input.headers };
-      const sourceBody = buildAttemptBody(input.body, input.path, plannedAttempt.model, {
+      // The lifted planning body (tool_result images moved out) must seed
+      // every attempt, not only the first one: a later model that rebuilds
+      // from the raw input body would see the images back inside tool_result
+      // and can answer with a shape 400 that stops the class loop.
+      const sourceBody = buildAttemptBody(attemptBuild.planningBody ?? input.body, input.path, plannedAttempt.model, {
         discountModel: input.headers[openRouterDiscountModelHeader],
         discountProvider: input.headers[openRouterDiscountProviderHeader]
       });

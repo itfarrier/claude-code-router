@@ -1132,6 +1132,78 @@ test("a stopped class refusal keeps a readable body", async () => {
   });
 });
 
+test("the lifted tool_result image reaches the next shelf model", async () => {
+  await withClassGateway(
+    {
+      excluded: [],
+      review: [],
+      shelves: {
+        ...emptyShelves(),
+        opus: [
+          { model: "alpha/model-a", provider: "BenchProvider", score: 80 },
+          { model: "beta/model-b", provider: "BenchProvider", score: 70 }
+        ]
+      },
+      updatedAt: new Date().toISOString()
+    },
+    async () => {
+      const base = gatewayChoiceConfig();
+      const singleCredConfig = {
+        ...base,
+        Providers: [{ ...base.Providers[0], credentials: [{ api_key: "sk-fixture-key-one" }] }]
+      };
+      const bodies = [];
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (_url, init) => {
+        bodies.push(JSON.parse(String(init?.body ?? "{}")));
+        if (bodies.length === 1) {
+          return new Response("{}", { headers: { "retry-after": "30" }, status: 429 });
+        }
+        return new Response("{}", { status: 200 });
+      };
+      try {
+        const result = await fetchUpstreamWithFallback({
+          body: Buffer.from(
+            JSON.stringify({
+              messages: [
+                {
+                  content: [
+                    {
+                      content: [{ text: "see", type: "text" }, { source: { type: "base64" }, type: "image" }],
+                      tool_use_id: "tu-1",
+                      type: "tool_result"
+                    }
+                  ],
+                  role: "user"
+                }
+              ],
+              model: "claude-opus-4-6"
+            })
+          ),
+          config: singleCredConfig,
+          coreAuthToken: "core-token",
+          fallback: { mode: "off", models: [], retryCount: 0 },
+          headers: {},
+          method: "POST",
+          path: "/v1/messages",
+          routedModel: "claude-opus-4-6",
+          upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+        });
+        assert.equal(result.response.status, 200);
+        assert.equal(bodies.length, 2);
+        const secondContent = bodies[1].messages[0].content;
+        assert.ok(secondContent.some((block) => block.type === "image"), "image was not lifted for the second leg");
+        const toolResult = secondContent.find((block) => block.type === "tool_result");
+        assert.ok(toolResult);
+        assert.ok(toolResult.content.every((block) => block.type !== "image"));
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+      resetGatewayBench();
+    }
+  );
+});
+
 test("a 429 on one shelf model does not skip the next model for that credential", async () => {
   await withClassGateway(
     {
