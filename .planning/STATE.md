@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 Phase: 1 of 3 (Shelves)
 Plan: — of TBD
 Status: Ready to plan
-Last activity: 2026-11-14 — Fork-seam design saved in `.planning/research/FORK-SEAMS.md`
+Last activity: 2026-11-14 — Plan corrected from chat c398a042-f199-48a6-afb9-9480889e3f22
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -63,7 +63,8 @@ Recent decisions affecting current work:
 - Class-switch code lives in `packages/core/src/class-switch/`. Parent files get only the seam calls in `.planning/research/FORK-SEAMS.md`. Do not rewrite the request loop, `credential-pool.ts`, or the Claude settings door.
 - A class request replaces the attempt list at the end of `createRouteExecutionPlan`. The parent loop walks that list.
 - Bench time comes from the provider response. Catalog refresh stays at 10 minutes. `CCR_CLASS_SWITCH=0` matches parent behavior.
-- v2 tuning (TUNE-01, TUNE-02) stays off this roadmap.
+- Chat `c398a042-f199-48a6-afb9-9480889e3f22` gaps are now in the v1 requirements and phase criteria: weight renormalization, tier words `fable`/`astra`, `opus`/`sol`, `sonnet`/`terra`, `haiku`/`luna`, bench scope, unchecked model below a confirmed one, `safeguards` on the notice, `tool_result` images, and the real `/v1/models` window.
+- PR #1179 stays superseded by `.planning/research/FORK-SEAMS.md`. TUNE-01 and TUNE-02 are out of scope. They were not in the source chat.
 
 ### Pending Todos
 
@@ -79,10 +80,10 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
-| Tuning | TUNE-01, TUNE-02 | Deferred | 2026-11-14 | v2 |
+| — | None | — | — | — |
 
 ## Session Continuity
 
 Last session: 2026-11-14
-Stopped at: Fork-seam design saved. Roadmap is still 3 phases and 14 requirements. Next step is planning Phase 1.
+Stopped at: Plan corrected from chat c398a042. Still 3 phases and 14 requirements. Next step is planning Phase 1.
 Resume file: None

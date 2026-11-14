@@ -146,6 +146,11 @@ Reviewed in the source chat: 1420 issues, 497 pull requests, 19 discussions. Ful
 | Leave Claude with only "gateway broken" when the free model died | issue #1951. The notice is the answer |
 | Let `/v1/models` hide the context window so Claude assumes 200k everywhere | issue #1911 |
 | Run a fallback leg with the wrong key and get a 401 | issue #1831 |
+| Let a hex model id skip classification or skip the policy | PR #1593 |
+| Treat a missing `CUSTOM_ROUTER_PATH` call as this design's failure | issue #1183. This design does not use that hook. See `.planning/research/FORK-SEAMS.md` |
+| Return "All target providers failed" while a lower class still has a live model | discussion #1907 |
+| Treat a tool-schema 400 as a dead model | discussion #1493. It is a request-shape 400 |
+| Add a gateway-wide proxy | discussion #1466. Out of scope. A proxy stays on one provider |
 
 ## What was on the shelves on the morning of 2026-11-14
 
