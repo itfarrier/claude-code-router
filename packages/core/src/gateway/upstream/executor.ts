@@ -529,8 +529,16 @@ export async function fetchUpstreamWithFallback(input: {
     releaseJsonObject(attemptSourceBody);
     releaseJsonObject(input.body);
 
-    if (classLive && attempt.credentialIds?.[0]) {
-      sentCredentialSlugs.add(attempt.credentialIds[0]);
+    if (classLive && attempt.target?.kind === "provider") {
+      // The sent set must be keyed per triple: the same slug on another model
+      // or another provider is a different attempt and stays eligible. Only
+      // the same provider+model+slug moves to the next credential.
+      const providerName = attempt.target.provider.name?.trim() ?? "";
+      const modelId = attempt.target.model.trim();
+      const sentSlug = attempt.credentialIds?.[0];
+      if (providerName && modelId && sentSlug) {
+        sentCredentialSlugs.add(`${providerName}\0${modelId}\0${sentSlug}`);
+      }
     }
 
     try {
@@ -906,7 +914,7 @@ function prepareUpstreamCredentialAttempt(input: {
       if (isBenched(providerName, modelId, slug)) {
         return false;
       }
-      if (input.sentCredentialSlugs?.has(slug)) {
+      if (input.sentCredentialSlugs?.has(`${providerName}\0${modelId}\0${slug}`)) {
         return false;
       }
       return true;
