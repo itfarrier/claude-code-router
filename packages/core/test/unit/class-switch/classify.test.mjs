@@ -151,3 +151,64 @@ test("matchOpenRouterModel final segment rule applies only without a slash", () 
   assert.deepEqual(matchOpenRouterModel("foo", [rows[0]])?.id, "a/foo");
   assert.deepEqual(matchOpenRouterModel("a/foo", rows)?.id, "a/foo");
 });
+
+test("gemini-4-hydrogen batch is excluded", () => {
+  const result = classify("google", "gemini-4-hydrogen:batch", { intelligence_index: 53.9 });
+  assert.equal(result.kind, "excluded");
+  assert.equal(result.reason, "batch");
+});
+
+test("batch colon segments are case-insensitive and do not match batcher", () => {
+  assert.equal(classify("p", "foo:BATCH", { coding_index: 70 }).reason, "batch");
+  assert.equal(classify("p", "foo:batch:free", { coding_index: 70 }).reason, "batch");
+  assert.notEqual(classify("p", "foo:batcher", { coding_index: 70 }).reason, "batch");
+  assert.equal(classify("p", "foo:free", { coding_index: 70 }).kind, "shelf");
+});
+
+test("batch wins over embed token and score", () => {
+  const result = classify("p", "text-embedding:batch", { coding_index: 80 });
+  assert.equal(result.reason, "batch");
+});
+
+test("non-text output modalities and architecture exclude models", () => {
+  assert.equal(
+    classify("p", "image-only", undefined, { outputModalities: ["image"] }).reason,
+    "non-text"
+  );
+  assert.equal(classify("p", "empty-out", undefined, { outputModalities: [] }).reason, "non-text");
+  assert.equal(
+    classify("p", "diagram", undefined, { architectureModality: "text+image->image" }).reason,
+    "non-text"
+  );
+  assert.equal(classify("p", "normal", undefined, { architectureModality: "text->text" }).kind, "excluded");
+});
+
+test("text-only vision output stays eligible", () => {
+  const result = classify("p", "vision-chat", undefined, {
+    architectureModality: "text+image->text",
+    outputModalities: ["text"]
+  });
+  assert.equal(result.kind, "excluded");
+  assert.equal(result.reason, "no-index");
+});
+
+test("embed and moderation id tokens are non-text", () => {
+  assert.equal(classify("p", "openai-text-embedding-3", undefined).reason, "non-text");
+  assert.equal(classify("p", "openai-text-EMBEDDING-3", undefined).reason, "non-text");
+  assert.notEqual(classify("p", "textembeddingservice", undefined).reason, "non-text");
+});
+
+test("gemini hydride one-index opus token shelves sonnet", () => {
+  const result = classify("google", "gemini-4-hydrogen-opus", { intelligence_index: 53.9 });
+  assert.equal(result.kind, "shelf");
+  assert.equal(result.class, "sonnet");
+});
+
+test("gemini hydride one-index fable token waits in review", () => {
+  const result = classify("google", "gemini-4-hydrogen-fable", { intelligence_index: 53.9 });
+  assert.equal(result.kind, "review");
+  assert.equal(result.reason, "score-tier-disagree");
+  assert.equal(result.scoreClass, "sonnet");
+  assert.equal(result.tierClass, "fable");
+  assert.notEqual(result.kind, "shelf");
+});
