@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve as pathResolve } from "node:path";
+import { effectiveContextWindowPercentFor } from "@ccr/core/contracts/app";
 import { resolveRuntimeDataDir } from "@ccr/core/runtime/app-paths";
 
 export type ShelfClass = "fable" | "opus" | "sonnet" | "haiku";
@@ -357,9 +358,32 @@ export type ContextWindowForProviderModelInput = {
   openRouterTopProviderContextLength?: number;
 };
 
+function positiveContextInteger(value: number | undefined): number | undefined {
+  return value !== undefined && Number.isFinite(value) && value > 0 ? Math.trunc(value) : undefined;
+}
+
 export function contextWindowForProviderModel(
-  _input: ContextWindowForProviderModelInput
+  input: ContextWindowForProviderModelInput
 ): number | undefined {
+  const metadata = input.metadata;
+  const metadataWindow =
+    positiveContextInteger(metadata?.contextWindow) ?? positiveContextInteger(metadata?.maxContextWindow);
+  if (metadataWindow) {
+    const effectivePercent = effectiveContextWindowPercentFor(metadata) ?? 100;
+    return Math.max(1, Math.floor((metadataWindow * effectivePercent) / 100));
+  }
+  const catalogMax = positiveContextInteger(input.catalogMaxInputTokens);
+  if (catalogMax) {
+    return catalogMax;
+  }
+  const openRouterLength = positiveContextInteger(input.openRouterContextLength);
+  if (openRouterLength) {
+    return openRouterLength;
+  }
+  const openRouterTop = positiveContextInteger(input.openRouterTopProviderContextLength);
+  if (openRouterTop) {
+    return openRouterTop;
+  }
   return undefined;
 }
 

@@ -17,6 +17,7 @@ import { uniqueStrings } from "@ccr/core/gateway/internal/collections";
 import { contextArchiveConfigForApiKey, contextArchiveMcpEnabled } from "@ccr/core/gateway/context-archive";
 import { resolveUsageModelAttribution } from "@ccr/core/usage/model-attribution";
 import { filterModelIdsForProfile, isModelAllowedForProfile, profileForApiKey } from "@ccr/core/profiles/model-allowlist";
+import { applyContextWindows } from "@ccr/core/class-switch/seam";
 import { getProviderCatalogModels } from "@ccr/core/providers/model-catalog";
 
 
@@ -105,13 +106,12 @@ export function createGatewayModelsResponse(config: AppConfig, headers: Incoming
   const contextArchiveConfig = contextArchiveConfigForApiKey(config, apiKey);
   const contextArchiveCompact = Boolean(contextArchiveConfig && contextArchiveMcpEnabled(contextArchiveConfig));
   const profile = profileForApiKey(config, apiKey);
-  if (isClaudeAppApiKey(apiKey)) {
-    return createClaudeAppGatewayModelsResponse(config, { contextArchiveCompact, profile });
-  }
-  if (isClaudeCodeUserAgent(headers)) {
-    return createClaudeAppGatewayModelsResponse(config, { claudeCode: true, contextArchiveCompact, profile });
-  }
-  return createOpenAICompatibleGatewayModelsResponse(config, profile);
+  const response = isClaudeAppApiKey(apiKey)
+    ? createClaudeAppGatewayModelsResponse(config, { contextArchiveCompact, profile })
+    : isClaudeCodeUserAgent(headers)
+      ? createClaudeAppGatewayModelsResponse(config, { claudeCode: true, contextArchiveCompact, profile })
+      : createOpenAICompatibleGatewayModelsResponse(config, profile);
+  return applyContextWindows(response, config);
 }
 
 
