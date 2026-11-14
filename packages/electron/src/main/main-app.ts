@@ -18,6 +18,7 @@ import { browserWebSearchMcpService } from "./electron-web-search-mcp";
 import { applyNativeThemePreference } from "./native-theme";
 import windowsManager from "./windows";
 import { closeRequestLogRuntime } from "@ccr/core/observability/request-log-store";
+import { stop as stopClassSwitch, start as startClassSwitch } from "@ccr/core/class-switch/seam";
 import { stopProviderModelAutoRefreshService, syncProviderModelAutoRefreshService } from "@ccr/core/providers/model-auto-refresh";
 import type { AppConfig } from "@ccr/core/contracts/app";
 
@@ -180,6 +181,7 @@ function handleTerminationSignal(signal: NodeJS.Signals): void {
 
 function stopServicesForQuit(): Promise<void> {
   if (!stopForQuitPromise) {
+    stopClassSwitch();
     stopProviderModelAutoRefreshService();
     stopForQuitPromise = gatewayService
       .stop({ proxyRestoreTimeoutMs: quitProxyRestoreTimeoutMs })
@@ -248,6 +250,7 @@ function startConfiguredServices(reason: string): Promise<void> {
           logProxySystemProxyIssue(reason, proxyStatus);
         }
         syncProviderModelAutoRefresh(config);
+        startClassSwitch(config);
       })
       .catch((error) => {
         console.error(`Failed to start configured services during ${reason}: ${formatError(error)}`);

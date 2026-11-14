@@ -39,6 +39,7 @@ import { getProviderCatalogModels } from "@ccr/core/providers/model-catalog";
 import { getOpenRouterProviderCatalog } from "@ccr/core/providers/openrouter-provider-catalog";
 import { getProviderPresets } from "@ccr/core/providers/presets/index";
 import { checkGatewayProviderConnectivity, probeGatewayProvider, probeGatewayProviderCandidates } from "@ccr/core/providers/probe";
+import { start as startClassSwitch } from "@ccr/core/class-switch/seam";
 import { syncProviderModelAutoRefreshService } from "@ccr/core/providers/model-auto-refresh";
 import { applyProfileConfig, recoverGlobalAgentProfile } from "@ccr/core/profiles/service";
 import { desktopCliCommandName, getProfileOpenCommand, getProfileRuntimeStatus, openProfileFromCcr, stopProfileFromCcr } from "@ccr/core/profiles/launch-service";
@@ -358,6 +359,7 @@ ipcMain.handle(IPC_CHANNELS.appSaveConfig, async (_event, config: AppConfig, opt
   await trayController.refreshIconFromConfig(savedConfig);
   invalidateProviderAccountSnapshotCache();
   syncProviderModelAutoRefresh(savedConfig);
+  startClassSwitch(savedConfig);
   return savedConfig;
 });
 ipcMain.handle(IPC_CHANNELS.appSetThemePreference, async (_event, theme: unknown) => {
