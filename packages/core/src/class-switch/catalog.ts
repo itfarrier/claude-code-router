@@ -88,6 +88,16 @@ const SHELF_CLASS_ORDER: ShelfClass[] = ["fable", "opus", "sonnet", "haiku"];
 
 const IGNORED_TIER_TOKENS = new Set(["flash", "mini", "nano", "lite"]);
 
+const NON_TEXT_ID_TOKENS = new Set([
+  "embed",
+  "embedding",
+  "whisper",
+  "tts",
+  "ocr",
+  "rerank",
+  "moderation"
+]);
+
 function fold(value: string): string {
   return value.toLowerCase();
 }
@@ -137,6 +147,51 @@ function higherShelfClass(a: ShelfClass, b: ShelfClass): ShelfClass {
   return SHELF_CLASS_ORDER.indexOf(a) < SHELF_CLASS_ORDER.indexOf(b) ? a : b;
 }
 
+function isBatchModelId(modelId: string): boolean {
+  return modelId.split(":").some((segment) => fold(segment) === "batch");
+}
+
+function architectureOutputSide(modality: string): string | undefined {
+  const parts = modality.split("->");
+  return parts.length > 1 ? parts[parts.length - 1] : undefined;
+}
+
+function modalityTokens(side: string): string[] {
+  return side.split("+").map((part) => fold(part.trim())).filter(Boolean);
+}
+
+function isNonTextModel(input: ClassifyInput): boolean {
+  for (const token of modelIdTokens(input.model)) {
+    if (NON_TEXT_ID_TOKENS.has(fold(token))) {
+      return true;
+    }
+  }
+  const outputs = input.outputModalities;
+  if (outputs !== undefined) {
+    if (!outputs.length) {
+      return true;
+    }
+    const hasText = outputs.some((modality) => fold(modality) === "text");
+    if (!hasText) {
+      return true;
+    }
+  }
+  const architecture = input.architectureModality;
+  if (architecture) {
+    const outputSide = architectureOutputSide(architecture);
+    if (outputSide) {
+      const tokens = modalityTokens(outputSide);
+      if (!tokens.includes("text")) {
+        return true;
+      }
+      if (tokens.some((token) => token === "image" || token === "audio" || token === "video")) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function presentIndexCount(indexes: ArtificialAnalysisIndexes | undefined): number {
   return (["coding_index", "agentic_index", "intelligence_index"] as const).filter(
     (key) => finiteIndex(indexes?.[key]) !== undefined
@@ -183,6 +238,13 @@ function shelfFromTierOnly(tierClasses: ShelfClass[]): ClassifyResult {
 }
 
 export function classifyModel(input: ClassifyInput): ClassifyResult {
+  if (isBatchModelId(input.model)) {
+    return { kind: "excluded", reason: "batch" };
+  }
+  if (isNonTextModel(input)) {
+    return { kind: "excluded", reason: "non-text" };
+  }
+
   const tierClasses = tierClassesFromModelId(input.model);
   const score = scoreArtificialAnalysis(input.artificialAnalysis);
   const presentCount = presentIndexCount(input.artificialAnalysis);
@@ -200,13 +262,21 @@ export function classifyModel(input: ClassifyInput): ClassifyResult {
     return { kind: "shelf", class: scoreClass, score };
   }
 
-  const tierClass = tierClasses[0];
+  const tierClass = tierClasses.reduce((left, right) =>
+    classDistance(scoreClass, right) > classDistance(scoreClass, left) ? right : left
+  );
   const distance = classDistance(scoreClass, tierClass);
   if (distance <= 1) {
     return { kind: "shelf", class: scoreClass, score, tierClass };
   }
 
-  return { kind: "shelf", class: scoreClass, score, tierClass };
+  return {
+    kind: "review",
+    reason: "score-tier-disagree",
+    scoreClass,
+    tierClass,
+    score
+  };
 }
 
 export function matchOpenRouterModel(
