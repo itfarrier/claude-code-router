@@ -22,13 +22,13 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 
 ### Bench
 
-- [ ] **BENCH-01**: User can have a failure sit out until the provider's own time, on this scope: 429 parks this token on this model until `Retry-After`, else `X-RateLimit-Reset`, else `next_flush_time` / `resets_at`; 401 with no time parks this token on every model of that provider and is rechecked every 5 minutes; 403 with `resets_at` parks this token until that minute; 403 with no time parks this token, is not probed, and the user is told to fix the key; 404 parks this model on every token for 1 hour; 5xx parks this model at this provider for 30 seconds. A 400 from request shape, including a tool-schema mismatch (parent discussion #1493), parks nobody.
-- [ ] **BENCH-02**: User can rely on quota from that response's headers and error fields. CCR does not ship a hard-coded free-tier requests-per-minute table.
+- [x] **BENCH-01**: User can have a failure sit out until the provider's own time, on this scope: 429 parks this token on this model until `Retry-After`, else `X-RateLimit-Reset`, else `next_flush_time` / `resets_at`; 401 with no time parks this token on every model of that provider and is rechecked every 5 minutes; 403 with `resets_at` parks this token until that minute; 403 with no time parks this token, is not probed, and the user is told to fix the key; 404 parks this model on every token for 1 hour; 5xx parks this model at this provider for 30 seconds. A 400 from request shape, including a tool-schema mismatch (parent discussion #1493), parks nobody.
+- [x] **BENCH-02**: User can rely on quota from that response's headers and error fields. CCR does not ship a hard-coded free-tier requests-per-minute table.
 
 ### Background
 
-- [ ] **BACK-01**: User can leave CCR running and, every 10 minutes, each provider's model list is refreshed with no text generation. New names are classified. Missing names leave the shelves.
-- [ ] **BACK-02**: User can have an unclassified-as-live model probed within 1–2 minutes when CCR might serve it and it has no fresh time. If the provider already named a time, the next probe is that time. A large remaining quota skips the extra probe. A successful Claude turn clears the bench early.
+- [x] **BACK-01**: User can leave CCR running and, every 10 minutes, each provider's model list is refreshed with no text generation. New names are classified. Missing names leave the shelves.
+- [x] **BACK-02**: User can have an unclassified-as-live model probed within 1–2 minutes when CCR might serve it and it has no fresh time. If the provider already named a time, the next probe is that time. A large remaining quota skips the extra probe. A successful Claude turn clears the bench early.
 
 ### Step-down
 
@@ -68,10 +68,10 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 | SHELF-03 | Phase 1 | Pending |
 | CHOICE-01 | Phase 2 | Pending |
 | CHOICE-02 | Phase 2 | Pending |
-| BENCH-01 | Phase 2 | Pending |
-| BENCH-02 | Phase 2 | Pending |
-| BACK-01 | Phase 1 | Pending |
-| BACK-02 | Phase 2 | Pending |
+| BENCH-01 | Phase 2 | Complete |
+| BENCH-02 | Phase 2 | Complete |
+| BACK-01 | Phase 1 | Complete |
+| BACK-02 | Phase 2 | Complete |
 | FALL-01 | Phase 3 | Pending |
 | FALL-02 | Phase 3 | Pending |
 | FALL-03 | Phase 3 | Pending |
