@@ -51,7 +51,7 @@ Plans:
   3. A failure sits out on the source-chat scope: 429 parks this token on this model until `Retry-After`, else `X-RateLimit-Reset`, else `next_flush_time` / `resets_at`; 401 with no time parks this token on every model of that provider and is rechecked every 5 minutes; 403 with `resets_at` parks this token until that minute; 403 with no time is not probed and the user is told to fix the key; 404 parks this model on every token for 1 hour; 5xx parks this model at this provider for 30 seconds. A 400 from request shape, including a tool-schema mismatch, parks nobody. Quota comes from that response, not a hard-coded free-tier table.
   4. User can have a model that CCR might serve, and that has no fresh time, probed within 1–2 minutes. If the provider already named a time, the next probe is that time. A large remaining quota skips the extra probe. A successful Claude turn clears the bench early.
   5. User sends a long Claude thread, including a model id that contains a slash or a hex model id, and the class policy still runs. The policy receives the model name, the tool list, and whether an image is present. It returns a parsed triple. It does not receive the message body.
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -61,7 +61,7 @@ Plans:
 - [x] 02-02-PLAN.md — Park from the provider clock and probe one shelf model
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 02-03-PLAN.md — Filter, sort, and lift images for the live triples
+- [x] 02-03-PLAN.md — Filter, sort, and lift images for the live triples
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 02-04-PLAN.md — Send one credential and continue a class refusal at once
@@ -85,5 +85,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Shelves | 3/3 | In Progress | - |
-| 2. Live choice | 2/4 | In Progress | - |
+| 2. Live choice | 3/4 | In Progress | - |
 | 3. Step-down | 0/TBD | Not started | - |
