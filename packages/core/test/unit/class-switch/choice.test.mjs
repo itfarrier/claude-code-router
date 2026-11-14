@@ -1076,3 +1076,55 @@ test("a stopped class refusal keeps a readable body", async () => {
     }
   });
 });
+
+test("a 429 on one shelf model does not skip the next model for that credential", async () => {
+  await withClassGateway(
+    {
+      excluded: [],
+      review: [],
+      shelves: {
+        ...emptyShelves(),
+        opus: [
+          { model: "alpha/model-a", provider: "BenchProvider", score: 80 },
+          { model: "beta/model-b", provider: "BenchProvider", score: 70 }
+        ]
+      },
+      updatedAt: new Date().toISOString()
+    },
+    async () => {
+      const base = gatewayChoiceConfig();
+      const singleCredConfig = {
+        ...base,
+        Providers: [{ ...base.Providers[0], credentials: [{ api_key: "sk-fixture-key-one" }] }]
+      };
+      const models = [];
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (_url, init) => {
+        models.push(String(JSON.parse(String(init?.body ?? "{}")).model));
+        if (models.length === 1) {
+          return new Response("{}", { headers: { "retry-after": "30" }, status: 429 });
+        }
+        return new Response("{}", { status: 200 });
+      };
+      try {
+        const result = await fetchUpstreamWithFallback({
+          body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+          config: singleCredConfig,
+          coreAuthToken: "core-token",
+          fallback: { mode: "off", models: [], retryCount: 0 },
+          headers: {},
+          method: "POST",
+          path: "/v1/messages",
+          routedModel: "claude-opus-4-6",
+          upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+        });
+        assert.equal(models.length, 2);
+        assert.ok(models[1].includes("beta/model-b"), `unexpected second model ${models[1]}`);
+        assert.equal(result.response.status, 200);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+      resetGatewayBench();
+    }
+  );
+});
