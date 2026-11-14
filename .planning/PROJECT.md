@@ -27,11 +27,11 @@ Claude Code orders a class. CCR serves the strongest live model in that class, a
 - ✓ Several API keys on one provider, with cooldown read and write in `packages/core/src/providers/credential-pool.ts` — existing product
 - ✓ A static fallback plan with modes `off`, `retry`, and `model-chain` in `packages/core/src/routing/execution-plan.ts` — existing product
 - ✓ Claude Code settings are pointed at the gateway on profile apply, CLI start, and config save. The three base URLs are set, Bedrock, Vertex, and Foundry flags are removed, and class env vars come only from profile fields — `packages/core/src/profiles/service.ts`
+- ✓ A Claude class request selects one shelf, including `best`, `opusplan`, and the `[1m]` window filter — Phase 1
+- ✓ New catalog models land on a shelf by score, or stay off the shelf when the rule says so — Phase 1
 
 ### Active
 
-- [ ] A Claude class request selects one shelf, including `best`, `opusplan`, and the `[1m]` window filter
-- [ ] New catalog models land on a shelf by score, or stay off the shelf when the rule says so
 - [ ] CCR serves the strongest live triple and retries the next triple before the first token
 - [ ] Failures sit on the bench until the provider's own time, not a hard-coded free-tier limit
 - [ ] An empty shelf steps down. Claude gets a success. The user sees one notice
@@ -78,8 +78,8 @@ Config mode is `yolo`. Granularity is `coarse`. Phase numbers start at 1 because
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Four classes: Fable, Opus, Sonnet, Haiku | They match Claude Code aliases. The user confirmed this split. | — Pending |
-| Score weights 0.50 / 0.30 / 0.20 and cuts 62 / 50 / 28 | Locked in the imported chat. Coding index, then agentic index, then intelligence index, from OpenRouter `benchmarks.artificial_analysis`. | — Pending |
+| Four classes: Fable, Opus, Sonnet, Haiku | They match Claude Code aliases. The user confirmed this split. | ✓ Shipped Phase 1 (shelf matching) |
+| Score weights 0.50 / 0.30 / 0.20 and cuts 62 / 50 / 28 | Locked in the imported chat. Coding index, then agentic index, then intelligence index, from OpenRouter `benchmarks.artificial_analysis`. | ✓ Shipped Phase 1 (catalog scoring) |
 | Dynamic attempt list at the end of `createRouteExecutionPlan`, not a second loop | The parent `fetchUpstreamWithFallback` already walks `attempts`. A class request replaces that list. Other requests keep `off`, `retry`, and `model-chain`. See `.planning/research/FORK-SEAMS.md`. | — Pending |
 | Provider reset time, not a fixed 15-minute probe or a 1-day park | The user rejected fixed probe and park timers. Catalog refresh stays at 10 minutes. | — Pending |
 | Stay on this fork, code in `packages/core/src/class-switch/` | A side `CUSTOM_ROUTER_PATH` file cannot rotate tokens or step down after a refusal. Editing the parent loop in place makes every upstream merge a rewrite. | — Pending |
@@ -104,4 +104,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-14 after chat c398a042-f199-48a6-afb9-9480889e3f22*
+*Last updated: 2026-11-15 after Phase 1*
