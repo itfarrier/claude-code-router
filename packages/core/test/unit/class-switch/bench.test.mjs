@@ -243,6 +243,25 @@ test("403 with no time sets probe false and logs fix-key", async () => {
   });
 });
 
+test("403 with no clock parks that credential for routing", async () => {
+  await withBenchEnv(async () => {
+    await refuse({ status: 403, provider: "BenchProvider", model: "alpha/model-a", credentialId: "cred:nokey", headers: hdr() });
+    assert.equal(isBenched("BenchProvider", "alpha/model-a", "cred:nokey"), true);
+    assert.equal(isBenched("BenchProvider", "alpha/model-a", "cred:other"), false);
+    assert.equal(isBenched("BenchProvider", "alpha/model-a"), false);
+    // A 403 clock that has passed makes the credential live again.
+    await recordClassRefusal(
+      403,
+      "BenchProvider",
+      "beta/model-b",
+      "cred:clocked",
+      hdr(),
+      { error: { metadata: { resets_at: new Date(FIXED_NOW - 1000).toISOString() } } }
+    );
+    assert.equal(isBenched("BenchProvider", "beta/model-b", "cred:clocked"), false);
+  });
+});
+
 test("404 parks model on every credential at that provider for one hour", async () => {
   await withBenchEnv(async () => {
     await refuse({ status: 404, provider: "BenchProvider", model: "alpha/model-a", credentialId: "cred:j", headers: hdr() });

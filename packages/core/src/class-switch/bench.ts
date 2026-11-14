@@ -460,10 +460,13 @@ function rowActive(row: BenchRow | undefined, now: number): boolean {
   if (!row) {
     return false;
   }
-  if (typeof row.until === "number" && row.until > now) {
+  // A 403 with no provider clock stores probe:false and no until: the bench
+  // told the operator to fix that key, so it stays parked for routing
+  // instead of spending a refusal on every later class request.
+  if (row.probe === false && row.until === undefined) {
     return true;
   }
-  return false;
+  return typeof row.until === "number" && row.until > now;
 }
 
 export function benchSortSignals(
