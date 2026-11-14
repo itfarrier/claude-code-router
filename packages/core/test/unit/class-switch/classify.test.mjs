@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   classifyModel,
   classForScore,
+  matchOpenRouterModel,
   scoreArtificialAnalysis
 } from "@ccr/core/class-switch/catalog.ts";
 
@@ -47,12 +48,15 @@ test("exact score cuts 62, 50, and 28 land on fable, opus, and sonnet", () => {
   assert.equal(classForScore(62, 2), "fable");
   assert.equal(classForScore(50, 2), "opus");
   assert.equal(classForScore(28, 2), "sonnet");
-  const all62 = { agentic_index: 62, coding_index: 62, intelligence_index: 62 };
-  const all50 = { agentic_index: 50, coding_index: 50, intelligence_index: 50 };
-  const all28 = { agentic_index: 28, coding_index: 28, intelligence_index: 28 };
-  assert.equal(classify("p", "fixture", all62).class, "fable");
-  assert.equal(classify("p", "fixture", all50).class, "opus");
-  assert.equal(classify("p", "fixture", all28).class, "sonnet");
+  const fableIndexes = { agentic_index: 63, coding_index: 63, intelligence_index: 63 };
+  const opusIndexes = { agentic_index: 50, coding_index: 50, intelligence_index: 50 };
+  const sonnetIndexes = { agentic_index: 28, coding_index: 28, intelligence_index: 28 };
+  assert.ok(scoreArtificialAnalysis(fableIndexes) >= 62);
+  assert.ok(scoreArtificialAnalysis(opusIndexes) >= 50 && scoreArtificialAnalysis(opusIndexes) < 62);
+  assert.ok(scoreArtificialAnalysis(sonnetIndexes) >= 28 && scoreArtificialAnalysis(sonnetIndexes) < 50);
+  assert.equal(classify("p", "fixture", fableIndexes).class, "fable");
+  assert.equal(classify("p", "fixture", opusIndexes).class, "opus");
+  assert.equal(classify("p", "fixture", sonnetIndexes).class, "sonnet");
 });
 
 test("score boundaries 61.9, 49.9, and 27.9 land on opus, sonnet, and haiku", () => {
@@ -117,10 +121,33 @@ test("two tier classes one step apart with no score shelf the higher class", () 
 });
 
 test("hex id abcdef0123456789 with score 62 is fable", () => {
-  const scored = classify("p", "abcdef0123456789", { coding_index: 62, agentic_index: 62 });
+  const scored = classify("p", "abcdef0123456789", {
+    agentic_index: 63,
+    coding_index: 63,
+    intelligence_index: 63
+  });
   assert.equal(scored.kind, "shelf");
   assert.equal(scored.class, "fable");
   const bare = classify("p", "abcdef0123456789", undefined);
   assert.equal(bare.kind, "excluded");
   assert.equal(bare.reason, "no-index");
+});
+
+test("matchOpenRouterModel uses id or canonical_slug with case insensitivity", () => {
+  const rows = [
+    { id: "OpenAI/GPT-5", canonical_slug: "openai/gpt-5" },
+    { id: "other/x", canonical_slug: "other/x" }
+  ];
+  assert.deepEqual(matchOpenRouterModel("openai/gpt-5", rows)?.id, "OpenAI/GPT-5");
+  assert.equal(matchOpenRouterModel("openai/gpt-5", [...rows, { id: "openai/gpt-5", canonical_slug: "dup" }]), undefined);
+});
+
+test("matchOpenRouterModel final segment rule applies only without a slash", () => {
+  const rows = [
+    { id: "a/foo", canonical_slug: "a/foo" },
+    { id: "b/foo", canonical_slug: "b/foo" }
+  ];
+  assert.equal(matchOpenRouterModel("foo", rows), undefined);
+  assert.deepEqual(matchOpenRouterModel("foo", [rows[0]])?.id, "a/foo");
+  assert.deepEqual(matchOpenRouterModel("a/foo", rows)?.id, "a/foo");
 });
