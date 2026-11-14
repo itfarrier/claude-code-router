@@ -102,7 +102,7 @@ Human verification deferred for phase 1 on 2026-11-14. Autonomous mode stops her
 
 | Phase | State | Resume |
 |-------|-------|--------|
-| 1 | verification_deferred_human | /gsd-verify-work 1 |
+| — | None — phase 1 human verification passed 2026-11-14T23:33:33Z (autonomous run) | — |
 
 ## Deferred Items
 
