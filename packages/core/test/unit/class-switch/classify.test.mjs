@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -130,6 +130,42 @@ test("two tier classes one step apart with no score shelf the higher class", () 
   assert.equal(result.kind, "shelf");
   assert.equal(result.class, "fable");
   assert.equal(result.score, undefined);
+});
+
+test("three tier classes without score review regardless of token order", () => {
+  const forward = classify("p", "fable-opus-haiku", undefined);
+  assert.equal(forward.kind, "review");
+  assert.equal(forward.reason, "score-tier-disagree");
+  const reverse = classify("p", "haiku-fable-opus", undefined);
+  assert.equal(reverse.kind, "review");
+  assert.equal(reverse.reason, "score-tier-disagree");
+});
+
+test("readShelfSnapshot rejects null excluded or review entries", async () => {
+  await withShelfTempDir(() => {
+  const file = shelfSnapshotPath();
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(
+      file,
+      JSON.stringify({
+        updatedAt: new Date().toISOString(),
+        excluded: [null],
+        review: [],
+        shelves: { fable: [], haiku: [], opus: [], sonnet: [] }
+      })
+    );
+    assert.equal(readShelfSnapshot(), undefined);
+    writeFileSync(
+      file,
+      JSON.stringify({
+        updatedAt: new Date().toISOString(),
+        excluded: [],
+        review: [null],
+        shelves: { fable: [], haiku: [], opus: [], sonnet: [] }
+      })
+    );
+    assert.equal(readShelfSnapshot(), undefined);
+  });
 });
 
 test("hex id abcdef0123456789 with score 62 is fable", () => {
@@ -274,6 +310,74 @@ function opusOneMillionPlan(config) {
   });
 }
 
+test("failed score GET keeps prior shelf rows and scores", async () => {
+  const config = benchRefreshConfig();
+  await withShelfTempDir(async () => {
+    await refreshClassShelves(config, {
+      fetchScores: async () => ({
+        ok: true,
+        rows: [
+          {
+            benchmarks: { artificial_analysis: { agentic_index: 70, coding_index: 70, intelligence_index: 70 } },
+            id: "gpt-5.6-sol"
+          }
+        ]
+      }),
+      probeProvider: async () => ({
+        capabilities: [],
+        models: ["gpt-5.6-sol"],
+        normalizedBaseUrl: "https://bench.provider/v1",
+        protocols: []
+      })
+    });
+    const scored = readShelfSnapshot()?.shelves.fable.find((row) => row.model === "gpt-5.6-sol");
+    assert.ok(scored?.score);
+
+    await refreshClassShelves(config, {
+      fetchScores: async () => ({ ok: false, rows: [] }),
+      probeProvider: async () => ({
+        capabilities: [],
+        models: ["gpt-5.6-sol", "brand-new-model"],
+        normalizedBaseUrl: "https://bench.provider/v1",
+        protocols: []
+      })
+    });
+    const snapshot = readShelfSnapshot();
+    const kept = snapshot?.shelves.fable.find((row) => row.model === "gpt-5.6-sol");
+    assert.ok(kept?.score);
+    assert.equal(snapshot?.excluded.some((row) => row.model === "gpt-5.6-sol"), false);
+    assert.equal(snapshot?.excluded.some((row) => row.model === "brand-new-model"), true);
+  });
+});
+
+test("catalog refresh excludes OpenRouter image-output models", async () => {
+  const config = benchRefreshConfig();
+  await withShelfTempDir(async () => {
+    await refreshClassShelves(config, {
+      fetchScores: async () => ({
+        ok: true,
+        rows: [
+          {
+            architecture: { modality: "text->image", output_modalities: ["image"] },
+            benchmarks: { artificial_analysis: { agentic_index: 70, coding_index: 70, intelligence_index: 70 } },
+            id: "gpt-image-1"
+          }
+        ]
+      }),
+      probeProvider: async () => ({
+        capabilities: [],
+        models: ["gpt-image-1"],
+        normalizedBaseUrl: "https://bench.provider/v1",
+        protocols: []
+      })
+    });
+    const snapshot = readShelfSnapshot();
+    const row = snapshot?.excluded.find((entry) => entry.model === "gpt-image-1");
+    assert.equal(row?.reason, "non-text");
+    assert.equal(snapshot?.shelves.fable.some((entry) => entry.model === "gpt-image-1"), false);
+  });
+});
+
 test("catalog refresh drops a missing model and keeps a failed provider", async () => {
   const config = benchRefreshConfig();
   await withShelfTempDir(async () => {
@@ -333,6 +437,33 @@ test("catalog refresh drops a missing model and keeps a failed provider", async 
     const snapshotText = readFileSync(shelfSnapshotPath(), "utf8");
     assert.equal(snapshotText.includes("sk-bench-test-key"), false);
     assert.deepEqual(config.Providers[0].models, ["gpt-5.6-sol", "stale-model"]);
+  });
+});
+
+test("catalog walk reloads config on each tick", async () => {
+  const loads = [];
+  const config = benchRefreshConfig();
+  let resolveDone;
+  const done = new Promise((resolve) => {
+    resolveDone = resolve;
+  });
+  await withShelfTempDir(async () => {
+    startClassSwitchCatalog(config, {
+      fetchScores: async () => ({ ok: true, rows: [] }),
+      loadConfig: async () => {
+        loads.push(1);
+        return config;
+      },
+      probeProvider: async () => ({ capabilities: [], models: ["gpt-5.6-sol"], protocols: [] }),
+      schedule(delayMs, run) {
+        if (delayMs === 0) {
+          void run().then(() => resolveDone());
+        }
+      }
+    });
+    await done;
+    assert.equal(loads.length, 1);
+    stopClassSwitchCatalog();
   });
 });
 
