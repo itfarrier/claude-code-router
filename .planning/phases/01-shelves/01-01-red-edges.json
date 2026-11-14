@@ -1,0 +1,9 @@
+{
+  "command": "node --test .test-dist/core/test/class-switch/plan.test.js",
+  "exitCode": 1,
+  "output": "not ok 2 - best opens the opus shelf",
+  "targetTest": "best opens the opus shelf",
+  "targetFile": "packages/core/test/unit/class-switch/plan.test.mjs",
+  "expected": "BenchProvider/motif-technologies/motif-3",
+  "actual": "best"
+}
