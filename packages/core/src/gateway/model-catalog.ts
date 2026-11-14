@@ -213,6 +213,11 @@ export function modelCatalogReasoningEffortConfig(entry: ModelCatalogEntry | und
   return { defaultEffort, efforts, supportsReasoning };
 }
 
+export function invalidateModelCatalogIndexForTest(): void {
+  catalogRevision = -1;
+  modelCatalogIndex = undefined;
+}
+
 function loadModelCatalogIndex(): ModelCatalogIndex {
   scheduleModelCatalogRefresh();
   const currentRevision = modelCatalogRevision();
