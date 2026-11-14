@@ -1,6 +1,6 @@
 ---
 phase: 01-shelves
-reviewed: 2026-11-14T18:02:35Z
+reviewed: 2026-11-14T18:29:57Z
 depth: deep
 files_reviewed: 11
 files_reviewed_list:
@@ -26,56 +26,47 @@ status: issues_found
 
 # Phase 01-shelves: Code Review Report
 
-**Reviewed:** 2026-11-14T18:02:35Z
+**Reviewed:** 2026-11-14T18:29:57Z
 **Depth:** deep
 **Files Reviewed:** 11
 **Status:** issues_found
 
 ## Summary
 
-Re-review after the fix pass. The eight targeted fixes hold in the current source. A failed score GET keeps the previous shelf row and score, and a new id is classified with no indexes. Refresh passes `architecture.modality` and `architecture.output_modalities` into `classifyModel`. Desktop start, quit, and config save call `startClassSwitch` / `stopClassSwitch`. Each tick reloads config. Three tier tokens use the highest-versus-lowest distance. The window overlay updates `supported` and `supports_1m_context` when those objects exist. Invalid `excluded` and `review` rows are rejected. `classForScore` returns `ShelfClass` and the impossible branch is gone.
+Re-review after commit `a933c3fb`. WR-07 is fixed. `runSerializedRefresh` keeps one `refreshClassShelves` in flight. `startClassSwitchCatalog` bumps `walkGeneration`, sets `refreshAgain`, and the seed `finally` schedules one delay-0 pass. That pass calls `loadConfig` again. The in-flight callback returns before `scheduleCatalogWalk` when its captured generation is behind, so it does not clear the pending delay-0 timer. `writeShelfSnapshot` is awaited inside the lock, so the older pass finishes before the later pass starts.
 
-WR-04 and IN-01 are still in the code. They stay open on purpose. They are not failed fixes. Necessity review was applied. No necessity finding remains.
+The test "config save during shelf refresh runs follow-up pass with newer snapshot" blocks the first probe, calls `startClassSwitchCatalog` again, and checks a second load of `"saved"` plus a snapshot that has `fresh-marker`.
 
-One new bug: a config save starts another walk while a refresh is still in flight. The older walk can clear the new timer or write its snapshot last.
+WR-04 and IN-01 are still in the code. They stay open on purpose. They are accepted deferrals, not failed fixes. Necessity review was applied. No necessity finding.
 
-Prior IDs fixed: CR-01, CR-02, CR-03, WR-01, WR-02, WR-03, WR-05, WR-06. Prior IDs still open: WR-04, IN-01. New ID: WR-07.
+The new waiter drops that later pass when the in-flight refresh rejects. That is WR-08.
+
+Prior IDs fixed: CR-01, CR-02, CR-03, WR-01, WR-02, WR-03, WR-05, WR-06, WR-07. Prior IDs still open: WR-04, IN-01. New ID: WR-08.
 
 Unit tests were read and not re-run.
 
 ## Warnings
 
-### WR-07: A config save during a shelf refresh keeps the older snapshot
+### WR-08: A failed shelf refresh drops the follow-up the config save requested
 
-**File:** `packages/core/src/class-switch/catalog.ts:830-861`
-**Issue:** `startClassSwitchCatalog` always schedules a delay-0 walk (`catalog.ts:874-876`). Web save, desktop save, and desktop startup all call that (`management-server.ts:460`, `ipc.ts:361`, `main-app.ts:253`). The timer callback sets `catalogWalkTimer` to `undefined` before the refresh (`catalog.ts:835-837`), then loads config and probes. A save during that probe schedules a second delay-0 run. There is no in-flight lock, unlike `runProviderModelAutoRefreshNow`. Two `refreshClassShelves` calls can both read the old snapshot and both `writeShelfSnapshot`. The older write can finish last and replace the newer shelves. If the first callback reaches `scheduleCatalogWalk` while the save's delay-0 timer is still pending, `defaultCatalogSchedule` clears that timer (`catalog.ts:832-834` and `catalog.ts:859-861`) and the immediate refresh never runs. The pre-save snapshot then stays until the next 10-minute tick. A provider or context-window edit made during a refresh does not reach class routing until that later tick.
-**Fix:** Run one refresh at a time. If `start` happens during that refresh, run one more pass that loads config again after the current pass. A stale callback must not clear the timer or write the snapshot after a newer pass has started.
+**File:** `packages/core/src/class-switch/catalog.ts:846-851`
+**Issue:** `runSerializedRefresh` sets `refreshAgain` and then awaits `refreshInFlight`. `startClassSwitchCatalog` bumps `walkGeneration` (`catalog.ts:897-899`), so the in-flight loop does not repeat (`catalog.ts:860`). The delay-0 callback is the waiter that must start the later pass. `await refreshInFlight` throws before the `refreshAgain` check when that pass rejects. `writeShelfSnapshot` sits outside the per-provider catch (`catalog.ts:828-829`), and `loadConfig()` can throw (`catalog.ts:859`). The schedule callback catches that error and, when this callback is the current generation, schedules the 10-minute interval (`catalog.ts:883-888`). A delay-0 callback that is already waiting during the probe then leaves the saved config off the shelf until that tick. A delay-0 callback that has not entered `runSerializedRefresh` yet still starts a fresh pass after the lock clears.
+**Fix:** Catch the in-flight rejection in the waiter and still start the queued pass. The owner callback still awaits the original promise and logs the failure.
 
 ```ts
-let refreshInFlight: Promise<void> | undefined;
-let refreshAgain = false;
-let walkGeneration = 0;
-
-async function runSerializedRefresh(options: ClassSwitchCatalogOptions): Promise<void> {
-  if (refreshInFlight) {
-    refreshAgain = true;
-    return refreshInFlight;
+if (refreshInFlight) {
+  refreshAgain = true;
+  try {
+    await refreshInFlight;
+  } catch {
+    // The failed pass must not drop a start that set refreshAgain.
   }
-  const generation = walkGeneration;
-  refreshInFlight = (async () => {
-    do {
-      refreshAgain = false;
-      const loadConfig = options.loadConfig ?? loadAppConfig;
-      await refreshClassShelves(await loadConfig(), options);
-    } while (refreshAgain && catalogWalkEnabled && generation === walkGeneration);
-  })().finally(() => {
-    refreshInFlight = undefined;
-  });
-  return refreshInFlight;
+  if (refreshAgain && catalogWalkEnabled) {
+    return runSerializedRefresh(options);
+  }
+  return;
 }
 ```
-
-Bump `walkGeneration` in `startClassSwitchCatalog` before the new schedule, and skip the trailing `scheduleCatalogWalk` when `generation !== walkGeneration`.
 
 ### WR-04: A permitted class name can be sent to a model the profile did not allow
 
@@ -88,11 +79,11 @@ Bump `walkGeneration` in `startClassSwitchCatalog` before the new schedule, and 
 ### IN-01: Snapshot window lookup is case-sensitive
 
 **File:** `packages/core/src/class-switch/seam.ts:65`
-**Issue:** Still open on purpose. The refresh stores the probe id as returned (`catalog.ts:732`). Metadata lookup folds case (`seam.ts:46-49`). Snapshot lookup requires `row.model === model` and `row.provider === providerName`. A probe id `gpt-4o` does not fill the window for registry model `GPT-4o`, so the third source is skipped and the response keeps the builder value.
+**Issue:** Still open on purpose. The refresh stores the trimmed probe id (`catalog.ts:735`). Metadata lookup folds case (`seam.ts:46-49`). Snapshot lookup requires `row.model === model` and `row.provider === providerName`. A probe id `gpt-4o` does not fill the window for registry model `GPT-4o`, so the third source is skipped and the response keeps the builder value.
 **Fix:** Compare provider and model with the same trim-and-lowercase match used for metadata keys. This was left open on purpose for this phase.
 
 ---
 
-_Reviewed: 2026-11-14T18:02:35Z_
+_Reviewed: 2026-11-14T18:29:57Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: deep_
