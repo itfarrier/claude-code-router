@@ -488,9 +488,10 @@ export function requestFacts(method: string, body: Buffer): RequestFacts {
   } catch {
     parsed = {};
   }
+  const metadata = parsed.metadata;
   const sessionId =
-    typeof isRecord(parsed.metadata) && typeof parsed.metadata.session_id === "string" && parsed.metadata.session_id.trim()
-      ? parsed.metadata.session_id.trim()
+    isRecord(metadata) && typeof metadata.session_id === "string" && metadata.session_id.trim()
+      ? metadata.session_id.trim()
       : undefined;
   return {
     estimatedTokens: usage.totalTokens,

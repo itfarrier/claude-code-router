@@ -1034,6 +1034,29 @@ test("requestFacts marks toolTurn when the last user content is only tool_result
   assert.equal(facts.sessionId, "meta-session");
 });
 
+test("requestFacts keeps tool facts when metadata is absent", () => {
+  const noMetadata = Buffer.from(
+    JSON.stringify({
+      messages: [{ content: "hi", role: "user" }],
+      tools: [{ function: { name: "Read" }, type: "function" }]
+    })
+  );
+  const noMetadataFacts = requestFacts("POST", noMetadata);
+  assert.deepEqual(noMetadataFacts.toolNames, ["Read"]);
+  assert.equal(noMetadataFacts.sessionId, undefined);
+
+  const nullMetadata = Buffer.from(
+    JSON.stringify({
+      messages: [{ content: "hi", role: "user" }],
+      metadata: null,
+      tools: [{ function: { name: "Bash" }, type: "function" }]
+    })
+  );
+  const nullMetadataFacts = requestFacts("POST", nullMetadata);
+  assert.deepEqual(nullMetadataFacts.toolNames, ["Bash"]);
+  assert.equal(nullMetadataFacts.sessionId, undefined);
+});
+
 test("a stopped class refusal keeps a readable body", async () => {
   await withClassGateway(twinModelShelf(), async () => {
     const config = gatewayChoiceConfig();
