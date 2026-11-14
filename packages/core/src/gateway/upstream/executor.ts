@@ -344,6 +344,15 @@ export async function fetchUpstreamWithFallback(input: {
     attemptStartedAtMonoMs: number;
     response: Response;
   } | undefined;
+  // A stored class refusal response is the one this request may still forward,
+  // so its body must stay readable until it is either returned or replaced.
+  const discardLastClassFailure = (): void => {
+    const pending = lastClassFailureResponse;
+    lastClassFailureResponse = undefined;
+    if (pending) {
+      void cancelResponseBody(pending.response);
+    }
+  };
   const attemptRoutingCache = new Map<string | undefined, {
     body?: Buffer;
     headers: Record<string, string>;
@@ -379,6 +388,7 @@ export async function fetchUpstreamWithFallback(input: {
 
   for (let index = 0; index < attempts.length; index += 1) {
     if (input.signal?.aborted) {
+      discardLastClassFailure();
       throw new UpstreamRequestError(abortSignalMessage(input.signal), {
         failedAttempts
       });
@@ -549,6 +559,7 @@ export async function fetchUpstreamWithFallback(input: {
               provider: modelParts.provider
             });
           }
+          discardLastClassFailure();
           input.trace?.capture({
             attempt: attemptNumber,
             durationMs: Date.now() - attemptStartedAt,
@@ -574,7 +585,7 @@ export async function fetchUpstreamWithFallback(input: {
         }
 
         if (response.status === 400) {
-          void cancelResponseBody(response);
+          discardLastClassFailure();
           input.trace?.capture({
             attempt: attemptNumber,
             durationMs: Date.now() - attemptStartedAt,
@@ -600,16 +611,27 @@ export async function fetchUpstreamWithFallback(input: {
         }
 
         const continueClass = classShouldContinueAfterStatus(response.status);
+        // A class refusal body must stay readable whenever this request may
+        // still forward it. A bench-row leg consumes the JSON for the refusal
+        // record, so it rebuilds a fresh Response from that text; every other
+        // leg forwards the upstream body untouched. Cancellation happens once
+        // the stored response can no longer be returned.
+        let forwarded = response;
         if (classWritesBenchRow(response.status) && modelParts) {
           let refusalBody: unknown;
           if (shouldBufferAggregateErrorBody(response.headers)) {
+            const raw = await response.text().catch(() => "");
+            forwarded = new Response(raw, {
+              headers: response.headers,
+              status: response.status,
+              statusText: response.statusText
+            });
             try {
-              refusalBody = JSON.parse(await response.text());
+              refusalBody = JSON.parse(raw);
             } catch {
               refusalBody = undefined;
             }
           }
-          void cancelResponseBody(response);
           await recordClassRefusal(
             response.status,
             modelParts.provider,
@@ -618,14 +640,13 @@ export async function fetchUpstreamWithFallback(input: {
             Object.fromEntries(response.headers.entries()),
             refusalBody
           );
-        } else {
-          void cancelResponseBody(response);
         }
 
+        discardLastClassFailure();
         lastClassFailureResponse = {
           attempt,
           attemptStartedAtMonoMs,
-          response
+          response: forwarded
         };
 
         if (continueClass && hasNextAttempt) {
@@ -674,7 +695,7 @@ export async function fetchUpstreamWithFallback(input: {
         return {
           attempt,
           failedAttempts,
-          response,
+          response: forwarded,
           timing: {
             attemptStartedAtMonoMs
           }
@@ -773,6 +794,7 @@ export async function fetchUpstreamWithFallback(input: {
         model: attempt.model
       });
       if (input.signal?.aborted) {
+        discardLastClassFailure();
         throw new UpstreamRequestError(abortSignalMessage(input.signal), {
           attempt,
           cause: error,
@@ -795,6 +817,7 @@ export async function fetchUpstreamWithFallback(input: {
         }
         continue;
       }
+      discardLastClassFailure();
       throw new UpstreamRequestError(message, {
         attempt,
         cause: error,
