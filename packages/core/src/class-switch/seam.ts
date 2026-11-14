@@ -6,7 +6,15 @@ import {
   stopClassSwitchCatalog
 } from "@ccr/core/class-switch/catalog";
 import { loadAppConfig } from "@ccr/core/config/config";
-import { attemptsForClass, parseClassRequest } from "@ccr/core/class-switch/plan";
+import {
+  attemptsForClass,
+  liftToolResultImages,
+  parseClassRequest,
+  rememberedCredential,
+  remember,
+  requestFacts,
+  setThinShareCounter
+} from "@ccr/core/class-switch/plan";
 import {
   decodeClaudeAppGatewayRouteId,
   stripClaudeAppGatewayOneMillionContextSuffix
@@ -187,6 +195,21 @@ export function stop(): void {
 }
 
 export { recordClassRefusal } from "@ccr/core/class-switch/bench";
+
+export {
+  liftToolResultImages,
+  rememberedCredential,
+  remember,
+  requestFacts,
+  setThinShareCounter
+};
+
+export function classShelfActive(modelName: string | undefined): boolean {
+  if (process.env.CCR_CLASS_SWITCH === "0") {
+    return false;
+  }
+  return Boolean(parseClassRequest(modelName));
+}
 
 export function applyShelf(plan: RouteExecutionPlan, input: RouteExecutionPlanInput): RouteExecutionPlan {
   if (process.env.CCR_CLASS_SWITCH === "0") {
