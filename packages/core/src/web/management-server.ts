@@ -35,6 +35,7 @@ import { getProviderCatalogModels } from "@ccr/core/providers/model-catalog";
 import { getOpenRouterProviderCatalog } from "@ccr/core/providers/openrouter-provider-catalog";
 import { getProviderPresets } from "@ccr/core/providers/presets/index";
 import { checkGatewayProviderConnectivity, probeGatewayProvider, probeGatewayProviderCandidates } from "@ccr/core/providers/probe";
+import { start as startClassSwitch, stop as stopClassSwitch } from "@ccr/core/class-switch/seam";
 import { stopProviderModelAutoRefreshService, syncProviderModelAutoRefreshService } from "@ccr/core/providers/model-auto-refresh";
 import { applyProfileConfig, recoverGlobalAgentProfile } from "@ccr/core/profiles/service";
 import { getProfileOpenCommand, getProfileRuntimeStatus, openProfileFromCcr, stopProfileFromCcr } from "@ccr/core/profiles/launch-service";
@@ -533,12 +534,14 @@ async function startConfiguredServices(reason: string): Promise<void> {
       }
     }
     syncProviderModelAutoRefresh(config);
+    startClassSwitch(config);
   } catch (error) {
     console.error(`Failed to start configured services during ${reason}: ${formatError(error)}`);
   }
 }
 
 async function stopConfiguredServices(): Promise<void> {
+  stopClassSwitch();
   stopProviderModelAutoRefreshService();
   await gatewayService.stop({ proxyRestoreTimeoutMs: 30_000 }).catch((error) => {
     console.error(`Failed to stop gateway: ${formatError(error)}`);

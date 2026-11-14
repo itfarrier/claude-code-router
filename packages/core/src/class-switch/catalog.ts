@@ -2,7 +2,24 @@ import { readFileSync } from "node:fs";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { dirname, resolve as pathResolve } from "node:path";
-import { effectiveContextWindowPercentFor } from "@ccr/core/contracts/app";
+import {
+  effectiveContextWindowPercentFor,
+  isGatewayProviderEnabled,
+  type AppConfig,
+  type GatewayProviderCapabilityProtocol,
+  type GatewayProviderConfig,
+  type GatewayProviderProtocol,
+  type ProviderCredentialConfig,
+  type ProviderModelMetadata
+} from "@ccr/core/contracts/app";
+import {
+  findModelCatalogEntry,
+  findProviderModelCatalogEntry,
+  modelCatalogMaxInputTokens
+} from "@ccr/core/gateway/model-catalog";
+import { providerModelAutoRefreshIntervalMs } from "@ccr/core/providers/model-auto-refresh";
+import { probeGatewayProvider } from "@ccr/core/providers/probe";
+import { providerRuntimeId } from "@ccr/core/routing/model-registry";
 import { resolveRuntimeDataDir } from "@ccr/core/runtime/app-paths";
 
 export type ShelfClass = "fable" | "opus" | "sonnet" | "haiku";
@@ -51,9 +68,11 @@ export type ClassifyResult =
     };
 
 export type OpenRouterModelRow = {
-  id?: string;
-  canonical_slug?: string;
   benchmarks?: { artificial_analysis?: ArtificialAnalysisIndexes };
+  canonical_slug?: string;
+  context_length?: number;
+  id?: string;
+  top_provider?: { context_length?: number };
 };
 
 const INDEX_WEIGHTS = {
@@ -387,18 +406,393 @@ export function contextWindowForProviderModel(
   return undefined;
 }
 
-export async function seedShelvesFromConfig(_config: unknown): Promise<void> {}
+type ClassSwitchCatalogProbe = typeof probeGatewayProvider;
 
-export async function refreshClassShelves(
-  _config: unknown,
-  _options?: unknown
-): Promise<ShelfSnapshot | undefined> {
-  return readShelfSnapshot();
+export type ClassSwitchCatalogOptions = {
+  fetchScores?: () => Promise<{ ok: boolean; rows: OpenRouterModelRow[] }>;
+  logger?: Pick<Console, "warn">;
+  probeProvider?: ClassSwitchCatalogProbe;
+  schedule?: (delayMs: number, run: () => void | Promise<void>) => void;
+};
+
+let catalogWalkEnabled = false;
+let catalogWalkTimer: ReturnType<typeof setTimeout> | undefined;
+
+function formatCatalogError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
-export function startClassSwitchCatalog(_config: unknown, _options?: unknown): void {}
+function emptyShelfSnapshot(): ShelfSnapshot {
+  return {
+    excluded: [],
+    review: [],
+    shelves: { fable: [], haiku: [], opus: [], sonnet: [] },
+    updatedAt: new Date().toISOString()
+  };
+}
 
-export function stopClassSwitchCatalog(): void {}
+function providerBaseUrl(provider: GatewayProviderConfig): string {
+  return (provider.api_base_url || provider.baseUrl || provider.baseurl || "").trim();
+}
+
+function providerCredentialApiKey(credential: ProviderCredentialConfig): string {
+  return (credential.api_key || credential.apiKey || credential.apikey || "").trim();
+}
+
+function providerApiKeyForModelRefresh(provider: GatewayProviderConfig): string {
+  const direct = provider.api_key || provider.apiKey || provider.apikey || "";
+  if (direct.trim()) {
+    return direct.trim();
+  }
+  return provider.credentials
+    ?.filter((credential) => credential.enabled !== false)
+    .map(providerCredentialApiKey)
+    .find(Boolean) ?? "";
+}
+
+const gatewayProviderProtocols = new Set<GatewayProviderProtocol>([
+  "anthropic_messages",
+  "gemini_generate_content",
+  "gemini_interactions",
+  "openai_chat_completions",
+  "openai_responses"
+]);
+
+function toGatewayProviderProtocol(value: unknown): GatewayProviderProtocol | undefined {
+  return typeof value === "string" && gatewayProviderProtocols.has(value as GatewayProviderProtocol)
+    ? value as GatewayProviderProtocol
+    : undefined;
+}
+
+function providerModelRefreshProtocols(provider: GatewayProviderConfig): GatewayProviderCapabilityProtocol[] {
+  const protocols = new Set<GatewayProviderCapabilityProtocol>();
+  for (const capability of provider.capabilities ?? []) {
+    protocols.add(capability.type);
+  }
+  const typeProtocol = toGatewayProviderProtocol(provider.type);
+  if (typeProtocol) {
+    protocols.add(typeProtocol);
+  }
+  const providerProtocol = toGatewayProviderProtocol(provider.provider);
+  if (providerProtocol) {
+    protocols.add(providerProtocol);
+  }
+  return [...protocols];
+}
+
+function providerPluginEnabled(plugin: unknown): boolean {
+  return !(plugin && typeof plugin === "object" && !Array.isArray(plugin) && (plugin as { enabled?: boolean }).enabled === false);
+}
+
+function providerPluginAliases(provider: GatewayProviderConfig): Set<string> {
+  const aliases = new Set(
+    [provider.name, provider.id, provider.provider, providerRuntimeId(provider)]
+      .map((value) => value?.trim().toLowerCase())
+      .filter((value): value is string => Boolean(value))
+  );
+  const protocols = providerModelRefreshProtocols(provider);
+  for (const alias of [...aliases]) {
+    for (const protocol of protocols) {
+      aliases.add(`${alias}::${protocol}`);
+    }
+  }
+  return aliases;
+}
+
+function providerPluginsForModelRefresh(config: AppConfig, provider: GatewayProviderConfig): unknown[] {
+  return (config.providerPlugins ?? []).filter((plugin) => {
+    if (!providerPluginEnabled(plugin) || !plugin || typeof plugin !== "object" || Array.isArray(plugin)) {
+      return false;
+    }
+    const record = plugin as Record<string, unknown>;
+    const key = typeof record.key === "string" ? record.key.trim().toLowerCase() : "";
+    if (!key.startsWith("ccr-local-agent-")) {
+      return false;
+    }
+    const pluginProviderName = (typeof record.providerName === "string" ? record.providerName : typeof record.provider === "string" ? record.provider : "").trim().toLowerCase();
+    return Boolean(pluginProviderName && providerPluginAliases(provider).has(pluginProviderName));
+  });
+}
+
+function providerModelMetadataFor(
+  provider: GatewayProviderConfig,
+  model: string
+): ProviderModelMetadata | undefined {
+  const metadata = provider.modelMetadata ?? {};
+  const direct = metadata[model];
+  if (direct) {
+    return direct;
+  }
+  const normalized = model.trim().toLowerCase();
+  return Object.entries(metadata).find(([name]) => name.trim().toLowerCase() === normalized)?.[1];
+}
+
+function catalogMaxForProviderModel(provider: GatewayProviderConfig, model: string): number | undefined {
+  const selector = `${provider.name?.trim()}/${model}`;
+  const entry = findProviderModelCatalogEntry(provider, model, [selector]) ?? findModelCatalogEntry(selector);
+  const max = modelCatalogMaxInputTokens(entry);
+  return max > 0 ? max : undefined;
+}
+
+function copyProviderRows(target: ShelfSnapshot, source: ShelfSnapshot, providerName: string): void {
+  for (const shelfClass of SHELF_CLASS_ORDER) {
+    target.shelves[shelfClass].push(...source.shelves[shelfClass].filter((row) => row.provider === providerName));
+  }
+  target.excluded.push(...source.excluded.filter((row) => row.provider === providerName));
+  target.review.push(...source.review.filter((row) => row.provider === providerName));
+}
+
+function placeClassifyResult(snapshot: ShelfSnapshot, base: ShelfRow, result: ClassifyResult): void {
+  if (result.kind === "shelf") {
+    snapshot.shelves[result.class].push({
+      ...base,
+      ...(result.score !== undefined ? { score: result.score } : {}),
+      ...(result.tierClass ? { tierClass: result.tierClass } : {})
+    });
+    return;
+  }
+  if (result.kind === "excluded") {
+    snapshot.excluded.push({ ...base, reason: result.reason });
+    return;
+  }
+  snapshot.review.push({
+    ...base,
+    reason: result.reason,
+    scoreClass: result.scoreClass,
+    tierClass: result.tierClass,
+    ...(result.score !== undefined ? { score: result.score } : {})
+  });
+}
+
+function openRouterHostKey(provider: GatewayProviderConfig): string | undefined {
+  const baseUrl = providerBaseUrl(provider);
+  if (!baseUrl) {
+    return undefined;
+  }
+  try {
+    return new URL(baseUrl).hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+function openRouterApiKey(config: AppConfig): string | undefined {
+  for (const provider of config.Providers) {
+    if (!isGatewayProviderEnabled(provider) || openRouterHostKey(provider) !== "openrouter.ai") {
+      continue;
+    }
+    const key = providerApiKeyForModelRefresh(provider);
+    if (key) {
+      return key;
+    }
+  }
+  return undefined;
+}
+
+function authorizationHeader(apiKey: string): string {
+  return /^Bearer\s+/i.test(apiKey) ? apiKey.trim() : `Bearer ${apiKey.trim()}`;
+}
+
+function parseOpenRouterScoreRows(payload: unknown): OpenRouterModelRow[] {
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+  const data = (payload as { data?: unknown }).data;
+  if (!Array.isArray(data)) {
+    return [];
+  }
+  return data.filter((row): row is OpenRouterModelRow => Boolean(row && typeof row === "object"));
+}
+
+async function fetchOpenRouterScoreRows(
+  config: AppConfig,
+  options: ClassSwitchCatalogOptions
+): Promise<OpenRouterModelRow[] | undefined> {
+  if (options.fetchScores) {
+    const result = await options.fetchScores();
+    return result.ok ? result.rows : undefined;
+  }
+  const url = "https://openrouter.ai/api/v1/models";
+  const request = async (apiKey?: string) =>
+    fetch(url, {
+      headers: {
+        accept: "application/json",
+        "cache-control": "no-cache",
+        ...(apiKey ? { authorization: authorizationHeader(apiKey) } : {})
+      },
+      signal: AbortSignal.timeout(10_000)
+    });
+  try {
+    let response = await request();
+    if (response.status === 401) {
+      const retryKey = openRouterApiKey(config);
+      if (!retryKey) {
+        return undefined;
+      }
+      response = await request(retryKey);
+    }
+    if (!response.ok) {
+      return undefined;
+    }
+    return parseOpenRouterScoreRows(await response.json());
+  } catch {
+    return undefined;
+  }
+}
+
+function classifyProviderModels(
+  config: AppConfig,
+  provider: GatewayProviderConfig,
+  modelIds: string[],
+  scoreRows: OpenRouterModelRow[] | undefined,
+  target: ShelfSnapshot
+): void {
+  const providerName = provider.name?.trim() ?? "";
+  const seen = new Set<string>();
+  for (const rawModel of modelIds) {
+    const model = rawModel.trim();
+    if (!model || seen.has(model)) {
+      continue;
+    }
+    seen.add(model);
+    const openRouterRow = scoreRows ? matchOpenRouterModel(model, scoreRows) : undefined;
+    const metadata = providerModelMetadataFor(provider, model);
+    const window = contextWindowForProviderModel({
+      metadata,
+      catalogMaxInputTokens: catalogMaxForProviderModel(provider, model),
+      openRouterContextLength: openRouterRow?.context_length,
+      openRouterTopProviderContextLength: openRouterRow?.top_provider?.context_length
+    });
+    const base: ShelfRow = window ? { model, provider: providerName, contextWindow: window } : { model, provider: providerName };
+    const classified = classifyModel({
+      artificialAnalysis: openRouterRow?.benchmarks?.artificial_analysis,
+      model,
+      provider: providerName
+    });
+    placeClassifyResult(target, base, classified);
+  }
+}
+
+function buildSeedSnapshot(config: AppConfig): ShelfSnapshot {
+  const snapshot = emptyShelfSnapshot();
+  for (const provider of config.Providers) {
+    if (!isGatewayProviderEnabled(provider)) {
+      continue;
+    }
+    classifyProviderModels(config, provider, provider.models ?? [], undefined, snapshot);
+  }
+  snapshot.updatedAt = new Date().toISOString();
+  return snapshot;
+}
+
+export async function seedShelvesFromConfig(config: AppConfig): Promise<void> {
+  if (process.env.CCR_CLASS_SWITCH === "0") {
+    return;
+  }
+  if (readShelfSnapshot()) {
+    return;
+  }
+  await writeShelfSnapshot(buildSeedSnapshot(config));
+}
+
+export async function refreshClassShelves(
+  config: AppConfig,
+  options: ClassSwitchCatalogOptions = {}
+): Promise<ShelfSnapshot> {
+  const probeProvider = options.probeProvider ?? probeGatewayProvider;
+  const previous = readShelfSnapshot() ?? emptyShelfSnapshot();
+  const scoreRows = await fetchOpenRouterScoreRows(config, options);
+  const snapshot = emptyShelfSnapshot();
+
+  for (const provider of config.Providers) {
+    if (!isGatewayProviderEnabled(provider)) {
+      continue;
+    }
+    const providerName = provider.name?.trim() ?? "";
+    const baseUrl = providerBaseUrl(provider);
+    if (!providerName || !baseUrl) {
+      continue;
+    }
+    try {
+      const probe = await probeProvider({
+        apiKey: providerApiKeyForModelRefresh(provider),
+        baseUrl,
+        forceRefresh: true,
+        mode: "models",
+        models: provider.models,
+        providerPlugins: providerPluginsForModelRefresh(config, provider),
+        protocols: providerModelRefreshProtocols(provider)
+      });
+      if (!Array.isArray(probe.models)) {
+        copyProviderRows(snapshot, previous, providerName);
+        continue;
+      }
+      classifyProviderModels(config, provider, probe.models, scoreRows, snapshot);
+    } catch (error) {
+      options.logger?.warn?.(`[class-switch] Failed to refresh models for ${providerName}: ${formatCatalogError(error)}`);
+      copyProviderRows(snapshot, previous, providerName);
+    }
+  }
+
+  snapshot.updatedAt = new Date().toISOString();
+  await writeShelfSnapshot(snapshot);
+  return snapshot;
+}
+
+function defaultCatalogSchedule(delayMs: number, run: () => void | Promise<void>): void {
+  // shortcut: providers with autoFetchModels are listed twice per 10 minutes, merge only if model-auto-refresh.ts becomes editable
+  if (catalogWalkTimer) {
+    clearTimeout(catalogWalkTimer);
+  }
+  catalogWalkTimer = setTimeout(() => {
+    catalogWalkTimer = undefined;
+    void Promise.resolve(run());
+  }, delayMs);
+  catalogWalkTimer.unref?.();
+}
+
+function scheduleCatalogWalk(
+  config: AppConfig,
+  options: ClassSwitchCatalogOptions,
+  delayMs: number
+): void {
+  if (!catalogWalkEnabled) {
+    return;
+  }
+  const schedule = options.schedule ?? defaultCatalogSchedule;
+  schedule(delayMs, async () => {
+    try {
+      await refreshClassShelves(config, options);
+    } catch (error) {
+      options.logger?.warn?.(`[class-switch] Catalog refresh failed: ${formatCatalogError(error)}`);
+    }
+    if (catalogWalkEnabled) {
+      scheduleCatalogWalk(config, options, providerModelAutoRefreshIntervalMs);
+    }
+  });
+}
+
+export function startClassSwitchCatalog(config: AppConfig, options: ClassSwitchCatalogOptions = {}): void {
+  if (process.env.CCR_CLASS_SWITCH === "0") {
+    return;
+  }
+  catalogWalkEnabled = true;
+  void seedShelvesFromConfig(config)
+    .catch((error) => {
+      options.logger?.warn?.(`[class-switch] Shelf seed failed: ${formatCatalogError(error)}`);
+    })
+    .finally(() => {
+      scheduleCatalogWalk(config, options, 0);
+    });
+}
+
+export function stopClassSwitchCatalog(): void {
+  catalogWalkEnabled = false;
+  if (catalogWalkTimer) {
+    clearTimeout(catalogWalkTimer);
+    catalogWalkTimer = undefined;
+  }
+}
 
 export async function writeShelfSnapshot(snapshot: ShelfSnapshot): Promise<void> {
   const file = shelfSnapshotPath();
