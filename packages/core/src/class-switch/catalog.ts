@@ -350,6 +350,19 @@ export function readShelfSnapshot(): ShelfSnapshot | undefined {
   }
 }
 
+export type ContextWindowForProviderModelInput = {
+  catalogMaxInputTokens?: number;
+  metadata?: import("@ccr/core/contracts/app").ProviderModelMetadata;
+  openRouterContextLength?: number;
+  openRouterTopProviderContextLength?: number;
+};
+
+export function contextWindowForProviderModel(
+  _input: ContextWindowForProviderModelInput
+): number | undefined {
+  return undefined;
+}
+
 export async function writeShelfSnapshot(snapshot: ShelfSnapshot): Promise<void> {
   const file = shelfSnapshotPath();
   const temporaryFile = `${file}.${randomUUID()}.tmp`;
