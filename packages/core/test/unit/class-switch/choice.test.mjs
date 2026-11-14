@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -15,8 +15,12 @@ import {
 import { classShelfActive, recordClassRefusal } from "@ccr/core/class-switch/seam.ts";
 import { writeShelfSnapshot } from "@ccr/core/class-switch/catalog.ts";
 import { invalidateModelCatalogIndexForTest } from "@ccr/core/gateway/model-catalog.ts";
+import { fetchUpstreamWithFallback } from "@ccr/core/gateway/upstream/executor.ts";
+import { readProviderCredentialCooldown } from "@ccr/core/providers/credential-pool.ts";
 import { createRouteExecutionPlan } from "@ccr/core/routing/execution-plan.ts";
 import { ModelRegistry } from "@ccr/core/routing/model-registry.ts";
+
+const executorSourcePath = path.resolve("packages/core/src/gateway/upstream/executor.ts");
 
 function emptyShelves() {
   return { fable: [], haiku: [], opus: [], sonnet: [] };
@@ -194,7 +198,7 @@ test("CCR_CLASS_SWITCH=0 keeps the parent attempt after a 5xx park", async () =>
 
 test("an explicit false image capability drops only that model", async () => {
   await withShelfDataDir(async (dir) => {
-    resetClassSwitchBenchForTest();
+    resetGatewayBench();
     writeTestModelCatalog(dir, [
       {
         capabilities: { imageInput: true, toolCalling: true },
@@ -226,7 +230,7 @@ test("an explicit false image capability drops only that model", async () => {
 test("a higher unchecked score still beats a lower confirmed score", async () => {
   setThinShareCounter(0);
   await withShelfDataDir(async () => {
-    resetClassSwitchBenchForTest();
+    resetGatewayBench();
     await writeShelfSnapshot({
       excluded: [],
       review: [],
@@ -248,7 +252,7 @@ test("a higher unchecked score still beats a lower confirmed score", async () =>
 
 test("equal scores put the confirmed model first", async () => {
   await withShelfDataDir(async () => {
-    resetClassSwitchBenchForTest();
+    resetGatewayBench();
     await writeShelfSnapshot({
       excluded: [],
       review: [],
@@ -527,6 +531,438 @@ test("liftToolResultImages moves type image out of tool_result and leaves a text
   assert.ok(toolResult);
   assert.ok(!toolResult.content.some((block) => block.type === "image"));
   assert.ok(toolResult.content.some((block) => block.type === "text"));
+});
+
+function gatewayChoiceConfig() {
+  return {
+    Providers: [
+      {
+        api_base_url: "https://bench.example/v1",
+        capabilities: [{ type: "anthropic_messages" }],
+        credentials: [
+          { api_key: "sk-fixture-key-one" },
+          { api_key: "sk-two", id: "cred:second" }
+        ],
+        models: ["alpha/model-a", "beta/model-b"],
+        name: "BenchProvider",
+        type: "anthropic_messages"
+      }
+    ],
+    profile: { profiles: [] },
+    Router: { fallback: { mode: "off", models: [], retryCount: 0 }, rules: [] },
+    virtualModelProfiles: []
+  };
+}
+
+function twinModelShelf() {
+  return {
+    excluded: [],
+    review: [],
+    shelves: {
+      ...emptyShelves(),
+      opus: [{ model: "alpha/model-a", provider: "BenchProvider", score: 80 }]
+    },
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function resetGatewayBench() {
+  resetClassSwitchBenchForTest();
+  const dir = process.env.CCR_INTERNAL_USER_DATA_DIR;
+  if (dir) {
+    try {
+      rmSync(path.join(dir, "cache", "class-switch-bench.json"), { force: true });
+    } catch {
+      // ignore missing bench file
+    }
+  }
+}
+
+function fetchInitHeaders(init) {
+  const raw = init?.headers;
+  if (!raw) {
+    return {};
+  }
+  if (typeof raw.forEach === "function") {
+    const headers = {};
+    raw.forEach((value, key) => {
+      headers[key] = value;
+    });
+    return headers;
+  }
+  return { ...raw };
+}
+
+async function withClassGateway(shelf, run) {
+  const previousSwitch = process.env.CCR_CLASS_SWITCH;
+  process.env.CCR_CLASS_SWITCH = "1";
+  try {
+    await withShelfDataDir(async () => {
+      resetGatewayBench();
+      await writeShelfSnapshot(shelf);
+      await run();
+    });
+  } finally {
+    if (previousSwitch === undefined) {
+      delete process.env.CCR_CLASS_SWITCH;
+    } else {
+      process.env.CCR_CLASS_SWITCH = previousSwitch;
+    }
+  }
+}
+
+test("a class attempt sends one credential", async () => {
+  await withClassGateway(twinModelShelf(), async () => {
+    const config = gatewayChoiceConfig();
+    const upstreamUrl = "http://127.0.0.1:3456/v1/messages";
+  const fetchCalls = [];
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_url, init) => {
+      const headers = fetchInitHeaders(init);
+      const targetProviders = headers["x-target-providers"] ?? headers["X-Target-Providers"];
+      fetchCalls.push({ headers, targetProviders });
+      const index = fetchCalls.length;
+      if (index === 1) {
+        return new Response("{}", { headers: { "retry-after": "30" }, status: 429 });
+      }
+      return new Response("{}", { headers: { "content-type": "application/json" }, status: 200 });
+    };
+
+    try {
+      const result = await fetchUpstreamWithFallback({
+        body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+        config,
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl
+      });
+      assert.equal(fetchCalls.length, 2);
+      assert.ok(!String(fetchCalls[0].targetProviders).includes(","));
+      assert.equal(result.attempt.credentialIds?.length, 1);
+      assert.equal(result.failedAttempts[0]?.credentialIds?.length, 1);
+      assert.notEqual(fetchCalls[0].targetProviders, fetchCalls[1].targetProviders);
+      assert.equal(result.failedAttempts[0]?.delayMs ?? 0, 0);
+      assert.equal(result.response.status, 200);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    resetGatewayBench();
+    let fetchCount = 0;
+    globalThis.fetch = async () => {
+      fetchCount += 1;
+      return new Response("{}", { status: 400 });
+    };
+    try {
+      await fetchUpstreamWithFallback({
+        body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+        config,
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl
+      });
+      assert.equal(fetchCount, 1);
+      assert.equal(isBenched("BenchProvider", "alpha/model-a"), false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    resetGatewayBench();
+    fetchCalls.length = 0;
+    const singleCredConfig = {
+      ...config,
+      Providers: [{ ...config.Providers[0], credentials: [{ api_key: "sk-fixture-key-one" }] }]
+    };
+    const provider = singleCredConfig.Providers[0];
+    globalThis.fetch = async () => new Response("{}", { status: 503 });
+    try {
+      const serverError = await fetchUpstreamWithFallback({
+        body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+        config: singleCredConfig,
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl
+      });
+      assert.equal(serverError.response.status, 503);
+      const firstCredential = provider.credentials[0];
+      assert.equal(readProviderCredentialCooldown(provider, firstCredential), undefined);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    resetGatewayBench();
+    fetchCalls.length = 0;
+    globalThis.fetch = async (_url, init) => {
+      fetchCalls.push(fetchInitHeaders(init));
+      return fetchCalls.length === 1
+        ? new Response("{}", { status: 402 })
+        : new Response("{}", { status: 200 });
+    };
+    try {
+      const paymentResult = await fetchUpstreamWithFallback({
+        body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+        config,
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl
+      });
+      assert.equal(fetchCalls.length, 2);
+      assert.notEqual(fetchCalls[0]["x-target-providers"], fetchCalls[1]["x-target-providers"]);
+      assert.equal(paymentResult.failedAttempts[0]?.delayMs ?? 0, 0);
+      assert.equal(isBenched("BenchProvider", "alpha/model-a"), false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    resetGatewayBench();
+    let networkFetches = 0;
+    globalThis.fetch = async () => {
+      networkFetches += 1;
+      if (networkFetches === 1) {
+        throw new Error("network reset");
+      }
+      return new Response("{}", { status: 200 });
+    };
+    try {
+      const networkResult = await fetchUpstreamWithFallback({
+        body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+        config,
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl
+      });
+      assert.equal(networkFetches, 2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    resetGatewayBench();
+    const metaCalls = [];
+    globalThis.fetch = async (_url, init) => {
+      metaCalls.push(fetchInitHeaders(init));
+      return metaCalls.length === 1
+        ? new Response("{}", { headers: { "content-type": "application/json" }, status: 402 })
+        : new Response("{}", { headers: { "content-type": "application/json" }, status: 200 });
+    };
+    try {
+      await fetchUpstreamWithFallback({
+        body: Buffer.from(
+          JSON.stringify({
+            messages: [
+              {
+                content: [{ content: [{ text: "ok", type: "text" }], tool_use_id: "tu-1", type: "tool_result" }],
+                role: "user"
+              }
+            ],
+            metadata: { session_id: "sess-meta" },
+            model: "claude-opus-4-6"
+          })
+        ),
+        config,
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl
+      });
+      await fetchUpstreamWithFallback({
+        body: Buffer.from(
+          JSON.stringify({
+            messages: [
+              {
+                content: [{ content: [{ text: "ok", type: "text" }], tool_use_id: "tu-1", type: "tool_result" }],
+                role: "user"
+              }
+            ],
+            metadata: { session_id: "sess-meta" },
+            model: "claude-opus-4-6"
+          })
+        ),
+        config,
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl
+      });
+      assert.match(String(metaCalls.at(-1)["x-target-providers"]), /cred-second/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  const previousSwitch = process.env.CCR_CLASS_SWITCH;
+  try {
+    process.env.CCR_CLASS_SWITCH = "0";
+    await withShelfDataDir(async () => {
+      resetGatewayBench();
+      await writeShelfSnapshot(twinModelShelf());
+      const headersSeen = [];
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (_url, init) => {
+        headersSeen.push(fetchInitHeaders(init));
+        return new Response("{}", { status: 200 });
+      };
+      try {
+        await fetchUpstreamWithFallback({
+          body: Buffer.from(
+            JSON.stringify({
+              messages: [{ content: "hi", role: "user" }],
+              model: "BenchProvider/alpha/model-a"
+            })
+          ),
+          config: gatewayChoiceConfig(),
+          coreAuthToken: "core-token",
+          fallback: { mode: "off", models: [], retryCount: 0 },
+          headers: {},
+          method: "POST",
+          path: "/v1/messages",
+          routedModel: "BenchProvider/alpha/model-a",
+          upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+        });
+        assert.ok(String(headersSeen[0]["x-target-providers"] ?? "").includes(","));
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+  } finally {
+    if (previousSwitch === undefined) {
+      delete process.env.CCR_CLASS_SWITCH;
+    } else {
+      process.env.CCR_CLASS_SWITCH = previousSwitch;
+    }
+  }
+
+  setThinShareCounter(19);
+  await withClassGateway(
+    {
+      excluded: [],
+      review: [],
+      shelves: {
+        ...emptyShelves(),
+        opus: [
+          { model: "alpha/model-a", provider: "BenchProvider", score: 80 },
+          { model: "beta/model-b", provider: "BenchProvider", score: 79 }
+        ]
+      },
+      updatedAt: new Date().toISOString()
+    },
+    async () => {
+      let firstModel;
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (_url, init) => {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        firstModel = body.model;
+        return new Response("{}", { status: 200 });
+      };
+      try {
+        await fetchUpstreamWithFallback({
+          body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+          config: gatewayChoiceConfig(),
+          coreAuthToken: "core-token",
+          fallback: { mode: "off", models: [], retryCount: 0 },
+          headers: {},
+          method: "POST",
+          path: "/v1/messages",
+          routedModel: "claude-opus-4-6",
+          upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+        });
+        assert.ok(
+          firstModel === "BenchProvider/beta/model-b" || firstModel === "beta/model-b",
+          `unexpected first model ${firstModel}`
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    }
+  );
+
+  await withClassGateway(twinModelShelf(), async () => {
+    let fetchCount = 0;
+    const seen = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_url, init) => {
+      fetchCount += 1;
+      seen.push(fetchInitHeaders(init));
+      return new Response("{}", { status: 404 });
+    };
+    try {
+      await fetchUpstreamWithFallback({
+        body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+        config: gatewayChoiceConfig(),
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+      });
+      assert.equal(fetchCount, 1);
+      assert.ok(seen.every((headers) => !headers["x-target-provider"]));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+test("a failed class leg omits the provider key", async () => {
+  await withClassGateway(twinModelShelf(), async () => {
+    const originalInfo = console.info;
+    const lines = [];
+    console.info = (...args) => {
+      lines.push(args.join(" "));
+    };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response("{}", { status: 403 });
+    try {
+      await fetchUpstreamWithFallback({
+        body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+        config: gatewayChoiceConfig(),
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+      });
+      const leg = lines.find((line) => line.includes("[class-switch]"));
+      assert.ok(leg);
+      assert.match(leg, /credential=/);
+      assert.doesNotMatch(leg, /sk-fixture-key-one/);
+      assert.match(lines.join("\n"), /fix-key/);
+      assert.doesNotMatch(readFileSync(executorSourcePath, "utf8"), /recordUsage/);
+    } finally {
+      console.info = originalInfo;
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 test("requestFacts marks toolTurn when the last user content is only tool_result blocks", () => {
