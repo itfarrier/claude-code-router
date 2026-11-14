@@ -678,14 +678,33 @@ function shouldProbeRow(provider: string, model: string, row: BenchRow | undefin
   return true;
 }
 
+function newestBenchRowFor(provider: string, model: string): BenchRow | undefined {
+  const providerName = provider.trim();
+  const modelId = model.trim();
+  let newest: BenchRow | undefined;
+  for (const [key, row] of benchRows) {
+    const [rowProvider, , rowModel] = key.split("\0");
+    if (rowProvider !== providerName || rowModel !== modelId) {
+      continue;
+    }
+    if (newest === undefined || (row.sampledAt ?? -1) > (newest.sampledAt ?? -1)) {
+      newest = row;
+    }
+  }
+  return newest;
+}
+
 async function runBenchProbeTick(config: AppConfig): Promise<void> {
+  // Load the saved bench before the first tick: after a restart the
+  // in-memory map stays empty until a request touches it, and a tick that
+  // skips loading can probe a credential whose saved row says probe:false.
+  loadBenchFromDisk();
   const now = benchNow();
   const probe = benchOptions?.probeProvider ?? probeGatewayProvider;
   for (const providerRow of shelfRows()) {
     const health =
-      [...benchRows.entries()].find(
-        ([key, value]) => key.startsWith(`${providerRow.provider}\0`) && key.endsWith(`\0${providerRow.model}`)
-      )?.[1] ?? benchRows.get(benchRowKey(providerRow.provider, "*", providerRow.model));
+      newestBenchRowFor(providerRow.provider, providerRow.model) ??
+      benchRows.get(benchRowKey(providerRow.provider, "*", providerRow.model));
     if (!shouldProbeRow(providerRow.provider, providerRow.model, health, now)) {
       continue;
     }
