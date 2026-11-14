@@ -4,6 +4,7 @@ import {
   startClassSwitchCatalog,
   stopClassSwitchCatalog
 } from "@ccr/core/class-switch/catalog";
+import { loadAppConfig } from "@ccr/core/config/config";
 import { attemptsForClass, parseClassRequest } from "@ccr/core/class-switch/plan";
 import {
   decodeClaudeAppGatewayRouteId,
@@ -104,10 +105,14 @@ function applyWindowFields(row: Record<string, unknown>, window: number): void {
   const contextWindow = capabilities.context_window;
   if (isRecord(contextWindow)) {
     contextWindow.max_input_tokens = window;
+    contextWindow.supported = window > 0;
+    contextWindow.supports_1m_context = window >= 1_000_000;
   }
   const contextManagement = capabilities.context_management;
   if (isRecord(contextManagement)) {
     contextManagement.max_input_tokens = window;
+    contextManagement.supported = window > 0;
+    contextManagement.supports_1m_context = window >= 1_000_000;
   }
 }
 
@@ -166,7 +171,7 @@ export function start(config: AppConfig): void {
   if (process.env.CCR_CLASS_SWITCH === "0") {
     return;
   }
-  startClassSwitchCatalog(config);
+  startClassSwitchCatalog(config, { loadConfig: loadAppConfig });
 }
 
 export function stop(): void {

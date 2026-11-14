@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
-  contextWindowForProviderModel
+  contextWindowForProviderModel,
+  writeShelfSnapshot
 } from "@ccr/core/class-switch/catalog.ts";
+import { applyContextWindows } from "@ccr/core/class-switch/seam.ts";
 import { createGatewayModelsResponse } from "@ccr/core/gateway/features/model-discovery.ts";
 
 function gatewayConfig(overrides = {}) {
@@ -139,6 +144,61 @@ test("contextWindowForProviderModel prefers catalog max over OpenRouter lengths"
     }),
     400_000
   );
+});
+
+test("snapshot-only overlay updates supported and supports_1m_context flags", async () => {
+  const previousDataDir = process.env.CCR_INTERNAL_USER_DATA_DIR;
+  const dir = mkdtempSync(path.join(tmpdir(), "ccr-class-switch-window-"));
+  const config = gatewayConfig({
+    provider: {
+      models: ["snap-win"],
+      modelMetadata: {}
+    }
+  });
+  try {
+    process.env.CCR_INTERNAL_USER_DATA_DIR = dir;
+    await writeShelfSnapshot({
+      excluded: [],
+      review: [],
+      shelves: {
+        fable: [],
+        haiku: [],
+        opus: [{ contextWindow: 1_048_576, model: "snap-win", provider: "TestProvider" }],
+        sonnet: []
+      },
+      updatedAt: new Date().toISOString()
+    });
+    const response = applyContextWindows(
+      {
+        data: [
+          {
+            capabilities: {
+              context_management: { max_input_tokens: 0, supported: false, supports_1m_context: false },
+              context_window: { max_input_tokens: 0, supported: false, supports_1m_context: false }
+            },
+            context_window: 0,
+            id: "TestProvider/snap-win",
+            max_context_window: 0,
+            max_input_tokens: 0
+          }
+        ]
+      },
+      config
+    );
+    const model = response.data[0];
+    assert.equal(model.max_input_tokens, 1_048_576);
+    assert.equal(model.capabilities.context_window.supported, true);
+    assert.equal(model.capabilities.context_window.supports_1m_context, true);
+    assert.equal(model.capabilities.context_management.supported, true);
+    assert.equal(model.capabilities.context_management.supports_1m_context, true);
+  } finally {
+    rmSync(dir, { force: true, recursive: true });
+    if (previousDataDir === undefined) {
+      delete process.env.CCR_INTERNAL_USER_DATA_DIR;
+    } else {
+      process.env.CCR_INTERNAL_USER_DATA_DIR = previousDataDir;
+    }
+  }
 });
 
 test("contextWindowForProviderModel falls back to OpenRouter context lengths", () => {
