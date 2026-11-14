@@ -3,8 +3,8 @@ gsd_state_version: "1.0"
 milestone: v1.0
 milestone_name: Automatic class switch
 status: planning
-last_updated: "2026-11-14T15:50:00.000Z"
-last_activity: 2026-11-14 — Phase 1 plans written
+last_updated: "2026-11-14T16:35:00.000Z"
+last_activity: 2026-11-14 — Phase 1 plan 03 revised for the shelf window and the review snapshot
 progress:
   total_phases: 3
   completed_phases: 0
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 Phase: 1 of 3 (Shelves)
 Plan: — of 3
 Status: Ready to execute
-Last activity: 2026-11-14 — Phase 1 plans written: `01-01-PLAN.md`, `01-02-PLAN.md`, `01-03-PLAN.md`
+Last activity: 2026-11-14 — Phase 1 plan 03 revised: seeded and kept shelf rows store the Pattern 6 window, and refresh asserts snapshot.review
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -85,5 +85,5 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-14
-Stopped at: Phase 1 plans are written. Still 3 phases and 14 requirements. Next step is `/gsd-execute-phase 1`.
+Stopped at: Phase 1 plans revised in place. Still 3 plans. Next step is `/gsd-execute-phase 1`.
 Resume file: None
