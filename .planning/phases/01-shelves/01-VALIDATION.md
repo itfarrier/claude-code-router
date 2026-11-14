@@ -1,9 +1,9 @@
 ---
 phase: "1"
 slug: "shelves"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-11-14"
 ---
 
@@ -38,11 +38,11 @@ created: "2026-11-14"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| pending | 01 | 0 | SHELF-01 | — | Class names open the matching shelf. `best` opens Opus. `[1m]` drops a window under 1,000,000. Kill switch keeps the parent plan. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 01 | 0 | SHELF-01 | T-1 input | `/v1/models` sets `context_window` and `max_context_window` from the real window. Unknown window does not become 200000. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 01 | 0 | SHELF-02 | T-1 input | Score uses weights 0.50 / 0.30 / 0.20 and cuts 62 / 50 / 28. One index cannot place a model above Sonnet. Tier words place a model with no index. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 01 | 0 | SHELF-03 | T-1 input | No index and no tier word, `:batch`, and non-text output stay off the shelves. Distance greater than 1 waits in review. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 01 | 0 | BACK-01 | T-1 wallet | Refresh uses `mode: "models"` and never sends a chat ping. A new id is classified. A missing id leaves the shelf. A failed fetch keeps it. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
+| pending | 01 | 0 | SHELF-01 | — | Class names open the matching shelf. `best` opens Opus. `[1m]` drops a window under 1,000,000. Kill switch keeps the parent plan. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 01 | 0 | SHELF-01 | T-1 input | `/v1/models` sets `context_window` and `max_context_window` from the real window. Unknown window does not become 200000. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 01 | 0 | SHELF-02 | T-1 input | Score uses weights 0.50 / 0.30 / 0.20 and cuts 62 / 50 / 28. One index cannot place a model above Sonnet. Tier words place a model with no index. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 01 | 0 | SHELF-03 | T-1 input | No index and no tier word, `:batch`, and non-text output stay off the shelves. Distance greater than 1 waits in review. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 01 | 0 | BACK-01 | T-1 wallet | Refresh uses `mode: "models"` and never sends a chat ping. A new id is classified. A missing id leaves the shelf. A failed fetch keeps it. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -50,10 +50,10 @@ created: "2026-11-14"
 
 ## Wave 0 Requirements
 
-- [ ] `packages/core/test/unit/class-switch/classify.test.mjs` — SHELF-02, SHELF-03, BACK-01 classifier and snapshot
-- [ ] `packages/core/test/unit/class-switch/plan.test.mjs` — SHELF-01 class parse, `[1m]`, hex route, kill switch, empty shelf
-- [ ] `packages/core/test/unit/class-switch/context-window.test.mjs` — SHELF-01 `/v1/models` fields
-- [ ] Framework install: none. `node:test` is already the runner.
+- [x] `packages/core/test/unit/class-switch/classify.test.mjs` — SHELF-02, SHELF-03, BACK-01 classifier and snapshot
+- [x] `packages/core/test/unit/class-switch/plan.test.mjs` — SHELF-01 class parse, `[1m]`, hex route, kill switch, empty shelf
+- [x] `packages/core/test/unit/class-switch/context-window.test.mjs` — SHELF-01 `/v1/models` fields
+- [x] Framework install: none. `node:test` is already the runner.
 
 ---
 
@@ -65,11 +65,19 @@ All phase behaviors have automated verification. Do not add a live OpenRouter te
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < one core unit-suite run
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < one core unit-suite run
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-11-15 — audit: all 5 map rows COVERED by Wave 0 test files; suite green for class-switch scope (960/965 total; 3 pre-existing failures in plugin-config tests outside phase scope: `plugin-config-migration.test.mjs`, `plugin-permissions.test.mjs`).
+
+## Validation Audit 2026-11-14
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
