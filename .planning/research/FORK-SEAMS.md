@@ -72,3 +72,11 @@ Add a remote named `upstream` for `https://github.com/musistudio/claude-code-rou
 Commits for this milestone should be the `class-switch/` directory plus the seam calls above.
 
 On a merge, conflicts belong on those call lines. Take the parent's `fetchUpstreamWithFallback`, credential pool, and config parser whole. After the merge, re-read two sites: the next-attempt condition in `executor.ts`, and the line in `createRouteExecutionPlan` that attaches this fork's list. Run once with `CCR_CLASS_SWITCH=0` and confirm the fork matches the parent on that path.
+
+## Checked against chat c398a042-f199-48a6-afb9-9480889e3f22
+
+That chat compared this file with the source chat `9cf95ff9-5d84-4b2b-adf4-165be1f6ff9b`. The source chat called the policy again after a refusal and pointed at PR #1179, and it took the token from `credential-pool.ts`. Those two placement choices stay superseded by this file.
+
+The product rules that chat found only in IMPORTED-DESIGN.md are now in `.planning/REQUIREMENTS.md` and in the phase success criteria. They are: weight renormalization, the tier words, bench scope, an unchecked model ranking below a confirmed one, `safeguards` in the step-down notice, images inside `tool_result`, and the real context window on `/v1/models`.
+
+Issue #1183 (the custom-router hook sometimes does not run) does not apply. This design does not use `CUSTOM_ROUTER_PATH`. The LiteLLM idea "one name, many live deployments" is CHOICE-01: one class name, many triples.

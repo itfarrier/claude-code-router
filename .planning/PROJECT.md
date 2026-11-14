@@ -83,6 +83,7 @@ Config mode is `yolo`. Granularity is `coarse`. Phase numbers start at 1 because
 | Dynamic attempt list at the end of `createRouteExecutionPlan`, not a second loop | The parent `fetchUpstreamWithFallback` already walks `attempts`. A class request replaces that list. Other requests keep `off`, `retry`, and `model-chain`. See `.planning/research/FORK-SEAMS.md`. | — Pending |
 | Provider reset time, not a fixed 15-minute probe or a 1-day park | The user rejected fixed probe and park timers. Catalog refresh stays at 10 minutes. | — Pending |
 | Stay on this fork, code in `packages/core/src/class-switch/` | A side `CUSTOM_ROUTER_PATH` file cannot rotate tokens or step down after a refusal. Editing the parent loop in place makes every upstream merge a rewrite. | — Pending |
+| Source-chat gaps from chat `c398a042-f199-48a6-afb9-9480889e3f22` are in the v1 requirements | Weight renormalization, tier words, bench scope, an unchecked model ranking below a confirmed one, `safeguards` in the notice, `tool_result` images, and the real `/v1/models` window were only in IMPORTED-DESIGN.md. Phase criteria now say them too. PR #1179 stays superseded by FORK-SEAMS.md. | — Pending |
 | Skip a second research pass | Chat `9cf95ff9-5d84-4b2b-adf4-165be1f6ff9b` is the locked design. | ✓ Good |
 
 ## Evolution
@@ -103,4 +104,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-14 after the fork-seam design*
+*Last updated: 2026-11-14 after chat c398a042-f199-48a6-afb9-9480889e3f22*
