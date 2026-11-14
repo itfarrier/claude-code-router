@@ -65,7 +65,7 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 |-------------|-------|--------|
 | SHELF-01 | Phase 1 | Complete |
 | SHELF-02 | Phase 1 | Complete |
-| SHELF-03 | Phase 1 | Pending |
+| SHELF-03 | Phase 1 | Complete |
 | CHOICE-01 | Phase 2 | Complete |
 | CHOICE-02 | Phase 2 | Complete |
 | BENCH-01 | Phase 2 | Complete |
