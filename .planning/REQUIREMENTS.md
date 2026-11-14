@@ -18,7 +18,7 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 ### Choice
 
 - [x] **CHOICE-01**: User can send a class request and CCR serves the highest-scoring triple (provider + token + model) that is not benched, has quota left, supports the request's tools and images, and fits the context. One class name covers many live triples. A model with no successful check ranks below a confirmed model of the same score. An image inside `tool_result` counts as an image and survives protocol translation (parent PR #1958, issue #1678). Near-tied models still receive a thin share of requests.
-- [ ] **CHOICE-02**: User can keep several tokens on one provider. CCR rotates the next live token. A refusal before the first token tries the next triple. After the first token, that triple stays until the tool turn ends.
+- [x] **CHOICE-02**: User can keep several tokens on one provider. CCR rotates the next live token. A refusal before the first token tries the next triple. After the first token, that triple stays until the tool turn ends.
 
 ### Bench
 
@@ -39,7 +39,7 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 ### Safety
 
 - [x] **SAFE-01**: User can send a long Claude thread, including a model id that contains a slash or a hex model id (parent PR #1593), and the class policy still runs. The policy receives the model name, the tool list, and whether an image is present. It returns a parsed triple. It does not receive the message body.
-- [ ] **SAFE-02**: User judges whether a class is alive from the bench and the step-down notice, not from the request success card (parent issue #1875). The card counts the user request. A failed leg is its own log line, without the API key.
+- [x] **SAFE-02**: User judges whether a class is alive from the bench and the step-down notice, not from the request success card (parent issue #1875). The card counts the user request. A failed leg is its own log line, without the API key.
 
 ## Out of Scope
 
@@ -67,7 +67,7 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 | SHELF-02 | Phase 1 | Complete |
 | SHELF-03 | Phase 1 | Pending |
 | CHOICE-01 | Phase 2 | Complete |
-| CHOICE-02 | Phase 2 | Pending |
+| CHOICE-02 | Phase 2 | Complete |
 | BENCH-01 | Phase 2 | Complete |
 | BENCH-02 | Phase 2 | Complete |
 | BACK-01 | Phase 1 | Complete |
@@ -76,7 +76,7 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 | FALL-02 | Phase 3 | Pending |
 | FALL-03 | Phase 3 | Pending |
 | SAFE-01 | Phase 2 | Complete |
-| SAFE-02 | Phase 2 | Pending |
+| SAFE-02 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 14 total
