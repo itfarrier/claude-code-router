@@ -52,14 +52,19 @@ findings:
     disposition: fixed
     title: "A config save during a shelf refresh keeps the older snapshot"
     source: gsd-code-fixer
+  - id: WR-08
+    severity: warning
+    disposition: fixed
+    title: "A failed shelf refresh drops the follow-up the config save requested"
+    source: gsd-code-fixer
   - id: IN-01
     severity: info
     disposition: open
     title: "Snapshot window lookup is case-sensitive"
 open: 2
-total: 11
+total: 12
 recorded: 2026-11-14T17:45:00.000Z
-updated: 2026-11-14T21:10:00.000Z
+updated: 2026-11-14T21:35:00.000Z
 ---
 
 # Phase 01: Code Review Disposition
@@ -76,6 +81,7 @@ updated: 2026-11-14T21:10:00.000Z
 | WR-05 | warning | fixed | gsd-code-fixer |
 | WR-06 | warning | fixed | gsd-code-fixer |
 | WR-07 | warning | fixed | gsd-code-fixer |
+| WR-08 | warning | fixed | gsd-code-fixer |
 | IN-01 | info | open | — |
 
 Dispositions: `open` (recorded, not yet triaged), `fixed`, `skipped`, `deferred`.

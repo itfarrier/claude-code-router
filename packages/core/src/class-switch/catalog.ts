@@ -845,7 +845,11 @@ function defaultCatalogSchedule(delayMs: number, run: () => void | Promise<void>
 async function runSerializedRefresh(options: ClassSwitchCatalogOptions): Promise<void> {
   if (refreshInFlight) {
     refreshAgain = true;
-    await refreshInFlight;
+    try {
+      await refreshInFlight;
+    } catch {
+      // The failed pass must not drop a start that set refreshAgain.
+    }
     if (refreshAgain && catalogWalkEnabled) {
       return runSerializedRefresh(options);
     }
