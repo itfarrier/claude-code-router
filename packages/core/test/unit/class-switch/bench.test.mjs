@@ -269,6 +269,8 @@ test("400 writes no bench row", async () => {
 
 test("remaining requests zero uses paired Groq duration", async () => {
   await withBenchEnv(async () => {
+    const mod = await benchImport();
+    mod.setClassSwitchBenchNowForTest?.(() => FIXED_NOW);
     await recordClassSuccess("groq", "m9", "cred:l", {
       headers: hdr({
         "x-ratelimit-remaining-requests": "0",
@@ -277,8 +279,12 @@ test("remaining requests zero uses paired Groq duration", async () => {
       durationMs: 12
     });
     const until = benchRowUntil("groq", "cred:l", "m9");
+    // A minute-less Groq duration parks for the real 7.66 seconds, not the
+    // sixty-second no-clock fallback.
+    const expected = FIXED_NOW + 7_660;
     assert.ok(until !== undefined);
-    assert.ok(until > FIXED_NOW + 7_000);
+    assert.ok(Math.abs(until - expected) < 5, `until ${until} is not the 7.66s reset`);
+    assert.notEqual(until, FIXED_NOW + 60_000);
   });
 });
 

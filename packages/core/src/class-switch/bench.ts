@@ -137,11 +137,12 @@ function headerNumber(headers: Headers | Record<string, string> | undefined, nam
 }
 
 function parseGroqDurationMs(value: string, now: number): number | undefined {
-  const match = /^(\d+)m([\d.]+)s$/i.exec(value.trim());
+  // Groq sends "2m59.56s" and sometimes just "7.66s" with no minute part.
+  const match = /^(?:(\d+)m)?([\d.]+)s$/i.exec(value.trim());
   if (!match) {
     return undefined;
   }
-  const minutes = Number(match[1]);
+  const minutes = Number(match[1] ?? 0);
   const seconds = Number(match[2]);
   if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) {
     return undefined;
