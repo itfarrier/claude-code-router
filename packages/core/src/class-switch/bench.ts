@@ -465,6 +465,51 @@ function rowActive(row: BenchRow | undefined, now: number): boolean {
   return false;
 }
 
+export function benchSortSignals(
+  provider: string,
+  model: string
+): {
+  confirmed: boolean;
+  lastSuccessDurationMs?: number;
+  remainingRequests?: number;
+  remainingTokens?: number;
+} {
+  loadBenchFromDisk();
+  const providerName = provider.trim();
+  const modelId = model.trim();
+  let confirmed = false;
+  let remainingRequests: number | undefined;
+  let remainingTokens: number | undefined;
+  let lastSuccessDurationMs: number | undefined;
+  for (const [key, row] of benchRows) {
+    const [rowProvider, , rowModel] = key.split("\0");
+    if (rowProvider !== providerName) {
+      continue;
+    }
+    if (rowModel !== "*" && rowModel !== modelId) {
+      continue;
+    }
+    if (row.confirmed) {
+      confirmed = true;
+    }
+    if (row.remainingRequests !== undefined) {
+      remainingRequests =
+        remainingRequests === undefined ? row.remainingRequests : Math.max(remainingRequests, row.remainingRequests);
+    }
+    if (row.remainingTokens !== undefined) {
+      remainingTokens =
+        remainingTokens === undefined ? row.remainingTokens : Math.max(remainingTokens, row.remainingTokens);
+    }
+    if (row.lastSuccessDurationMs !== undefined) {
+      lastSuccessDurationMs =
+        lastSuccessDurationMs === undefined
+          ? row.lastSuccessDurationMs
+          : Math.min(lastSuccessDurationMs, row.lastSuccessDurationMs);
+    }
+  }
+  return { confirmed, lastSuccessDurationMs, remainingRequests, remainingTokens };
+}
+
 export function isBenched(provider: string, model: string, credentialId?: string): boolean {
   loadBenchFromDisk();
   const now = benchNow();

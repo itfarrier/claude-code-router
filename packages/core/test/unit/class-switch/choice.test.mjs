@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -14,6 +14,7 @@ import {
 } from "@ccr/core/class-switch/plan.ts";
 import { classShelfActive, recordClassRefusal } from "@ccr/core/class-switch/seam.ts";
 import { writeShelfSnapshot } from "@ccr/core/class-switch/catalog.ts";
+import { invalidateModelCatalogIndexForTest } from "@ccr/core/gateway/model-catalog.ts";
 import { createRouteExecutionPlan } from "@ccr/core/routing/execution-plan.ts";
 import { ModelRegistry } from "@ccr/core/routing/model-registry.ts";
 
@@ -21,14 +22,20 @@ function emptyShelves() {
   return { fable: [], haiku: [], opus: [], sonnet: [] };
 }
 
-function benchRegistry(overrides = {}) {
+function benchRegistry() {
+  return new ModelRegistry({
+    Providers: [{ models: ["alpha/model-a", "beta/model-b"], name: "BenchProvider" }],
+    virtualModelProfiles: []
+  });
+}
+
+function twinCredentialRegistry() {
   return new ModelRegistry({
     Providers: [
       {
-        credentials: [{ api_key: "sk-one" }, { api_key: "sk-two", credentialId: "cred:second" }],
+        credentials: [{ api_key: "sk-one" }, { api_key: "sk-two", id: "cred:second" }],
         models: ["alpha/model-a", "beta/model-b"],
-        name: "BenchProvider",
-        ...overrides.provider
+        name: "BenchProvider"
       }
     ],
     virtualModelProfiles: []
@@ -41,7 +48,7 @@ function visionRegistry() {
       {
         modelMetadata: {
           "alpha/model-a": { capabilities: { imageInput: false } },
-          "beta/model-b": {}
+          "beta/model-b": { capabilities: { imageInput: true } }
         },
         models: ["alpha/model-a", "beta/model-b"],
         name: "BenchProvider"
@@ -71,6 +78,13 @@ function classPlan(bodyModel, registry, overrides = {}) {
     primaryModel: bodyModel,
     ...overrides
   });
+}
+
+function writeTestModelCatalog(dir, models) {
+  const file = path.join(dir, "choice-model-catalog.json");
+  writeFileSync(file, JSON.stringify({ models, schemaVersion: 2 }));
+  process.env.CCR_MODEL_CATALOG_PATH = file;
+  invalidateModelCatalogIndexForTest();
 }
 
 async function withShelfDataDir(run) {
@@ -179,7 +193,16 @@ test("CCR_CLASS_SWITCH=0 keeps the parent attempt after a 5xx park", async () =>
 });
 
 test("an explicit false image capability drops only that model", async () => {
-  await withShelfDataDir(async () => {
+  await withShelfDataDir(async (dir) => {
+    resetClassSwitchBenchForTest();
+    writeTestModelCatalog(dir, [
+      {
+        capabilities: { imageInput: true, toolCalling: true },
+        id: "BenchProvider/beta/model-b",
+        model: "beta/model-b",
+        providers: ["BenchProvider"]
+      }
+    ]);
     await writeShelfSnapshot({
       excluded: [],
       review: [],
@@ -201,6 +224,7 @@ test("an explicit false image capability drops only that model", async () => {
 });
 
 test("a higher unchecked score still beats a lower confirmed score", async () => {
+  setThinShareCounter(0);
   await withShelfDataDir(async () => {
     resetClassSwitchBenchForTest();
     await writeShelfSnapshot({
@@ -289,13 +313,8 @@ test("a missing window keeps the model on a large estimate", async () => {
 });
 
 test("a tool name plus toolCalling false drops the row", async () => {
-  const previousCatalog = process.env.CCR_MODEL_CATALOG_PATH;
-  const catalogPath = path.join(tmpdir(), `ccr-choice-catalog-${Date.now()}.json`);
-  const { writeFileSync } = await import("node:fs");
-  writeFileSync(
-    catalogPath,
-    JSON.stringify({
-      models: [
+    await withShelfDataDir(async (dir) => {
+      writeTestModelCatalog(dir, [
         {
           capabilities: { toolCalling: false },
           id: "BenchProvider/alpha/model-a",
@@ -308,12 +327,7 @@ test("a tool name plus toolCalling false drops the row", async () => {
           model: "beta/model-b",
           providers: ["BenchProvider"]
         }
-      ]
-    })
-  );
-  try {
-    process.env.CCR_MODEL_CATALOG_PATH = catalogPath;
-    await withShelfDataDir(async () => {
+      ]);
       await writeShelfSnapshot({
         excluded: [],
         review: [],
@@ -334,19 +348,12 @@ test("a tool name plus toolCalling false drops the row", async () => {
       assert.equal(attempts?.length, 1);
       assert.equal(attempts?.[0]?.model, "BenchProvider/beta/model-b");
     });
-  } finally {
-    if (previousCatalog === undefined) {
-      delete process.env.CCR_MODEL_CATALOG_PATH;
-    } else {
-      process.env.CCR_MODEL_CATALOG_PATH = previousCatalog;
-    }
-    rmSync(catalogPath, { force: true });
-  }
 });
 
 test("two attemptsForClass calls with no setThinShareCounter both keep the leader", async () => {
+  setThinShareCounter(0);
+  resetClassSwitchBenchForTest();
   await withShelfDataDir(async () => {
-    setThinShareCounter(0);
     await writeShelfSnapshot({
       excluded: [],
       review: [],
@@ -370,8 +377,9 @@ test("two attemptsForClass calls with no setThinShareCounter both keep the leade
 });
 
 test("setThinShareCounter(19) then one call puts the neighbor first", async () => {
+  setThinShareCounter(19);
+  resetClassSwitchBenchForTest();
   await withShelfDataDir(async () => {
-    setThinShareCounter(19);
     await writeShelfSnapshot({
       excluded: [],
       review: [],
@@ -390,8 +398,8 @@ test("setThinShareCounter(19) then one call puts the neighbor first", async () =
 });
 
 test("setThinShareCounter(20) then one call keeps the leader", async () => {
+  setThinShareCounter(20);
   await withShelfDataDir(async () => {
-    setThinShareCounter(20);
     await writeShelfSnapshot({
       excluded: [],
       review: [],
@@ -410,8 +418,9 @@ test("setThinShareCounter(20) then one call keeps the leader", async () => {
 });
 
 test("classShelfActive before a thin-share call does not consume the count", async () => {
+  setThinShareCounter(19);
+  resetClassSwitchBenchForTest();
   await withShelfDataDir(async () => {
-    setThinShareCounter(19);
     await writeShelfSnapshot({
       excluded: [],
       review: [],
@@ -441,7 +450,7 @@ test("two live credentials produce two rows with the same model selector", async
       },
       updatedAt: new Date().toISOString()
     });
-    const attempts = attemptsForClass(parseClassRequest("claude-opus-4-6"), benchRegistry(), opusScalars());
+    const attempts = attemptsForClass(parseClassRequest("claude-opus-4-6"), twinCredentialRegistry(), opusScalars());
     assert.equal(attempts?.length, 2);
     assert.ok(attempts?.every((row) => row.model === "BenchProvider/alpha/model-a"));
   });
@@ -462,7 +471,7 @@ test("toolTurn true returns the remembered row", async () => {
       },
       updatedAt: new Date().toISOString()
     });
-    const attempts = attemptsForClass(parseClassRequest("claude-opus-4-6"), benchRegistry(), {
+    const attempts = attemptsForClass(parseClassRequest("claude-opus-4-6"), twinCredentialRegistry(), {
       ...opusScalars(),
       sessionId: "sess-tool",
       toolTurn: true
@@ -487,7 +496,7 @@ test("a non-empty user text block does not use the remembered triple", async () 
       },
       updatedAt: new Date().toISOString()
     });
-    const attempts = attemptsForClass(parseClassRequest("claude-opus-4-6"), benchRegistry(), {
+    const attempts = attemptsForClass(parseClassRequest("claude-opus-4-6"), twinCredentialRegistry(), {
       ...opusScalars(),
       sessionId: "sess-text",
       toolTurn: false
