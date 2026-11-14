@@ -1,0 +1,84 @@
+{
+  "mode": "yolo",
+  "granularity": "coarse",
+  "model_profile": "adaptive",
+  "model_overrides": {
+    "gsd-planner": "grok-4.7[context=500k,reasoning_effort=xhigh,fast=false]",
+    "gsd-debugger": "grok-4.7[context=500k,reasoning_effort=xhigh,fast=false]",
+    "gsd-code-reviewer": "grok-4.7[context=500k,reasoning_effort=high,fast=false]",
+    "gsd-verifier": "grok-4.7[context=500k,reasoning_effort=high,fast=false]",
+    "gsd-phase-researcher": "grok-4.7[context=500k,reasoning_effort=medium,fast=false]",
+    "gsd-project-researcher": "grok-4.7[context=500k,reasoning_effort=medium,fast=false]",
+    "gsd-ui-researcher": "grok-4.7[context=256k,reasoning_effort=high,fast=false]",
+    "gsd-advisor-researcher": "grok-4.7[context=256k,reasoning_effort=high,fast=false]",
+    "gsd-ai-researcher": "grok-4.7[context=256k,reasoning_effort=high,fast=false]",
+    "gsd-domain-researcher": "grok-4.7[context=500k,reasoning_effort=low,fast=false]",
+    "gsd-roadmapper": "grok-4.7[context=256k,reasoning_effort=xhigh,fast=false]",
+    "gsd-assumptions-analyzer": "grok-4.7[context=256k,reasoning_effort=xhigh,fast=false]",
+    "gsd-eval-planner": "grok-4.7[context=256k,reasoning_effort=xhigh,fast=false]",
+    "gsd-framework-selector": "grok-4.7[context=256k,reasoning_effort=xhigh,fast=false]",
+    "gsd-executor": "composer-2.5",
+    "gsd-code-fixer": "composer-2.5",
+    "gsd-doc-writer": "composer-2.5",
+    "gsd-debug-session-manager": "grok-4.7[context=256k,reasoning_effort=medium,fast=false]",
+    "gsd-codebase-mapper": "grok-4.7[context=256k,reasoning_effort=low,fast=false]",
+    "gsd-pattern-mapper": "grok-4.7[context=256k,reasoning_effort=low,fast=false]",
+    "gsd-plan-checker": "grok-4.7[context=256k,reasoning_effort=medium,fast=false]",
+    "gsd-integration-checker": "grok-4.7[context=256k,reasoning_effort=medium,fast=false]",
+    "gsd-nyquist-auditor": "composer-2.5",
+    "gsd-ui-checker": "composer-2.5",
+    "gsd-ui-auditor": "composer-2.5",
+    "gsd-doc-verifier": "composer-2.5",
+    "gsd-dom-verifier": "composer-2.5",
+    "gsd-eval-auditor": "grok-4.7[context=256k,reasoning_effort=medium,fast=false]",
+    "gsd-security-auditor": "grok-4.7[context=256k,reasoning_effort=high,fast=false]",
+    "gsd-research-synthesizer": "grok-4.7[context=500k,reasoning_effort=low,fast=false]",
+    "gsd-doc-classifier": "grok-4.7[context=256k,reasoning_effort=low,fast=false]",
+    "gsd-doc-synthesizer": "grok-4.7[context=256k,reasoning_effort=low,fast=false]",
+    "gsd-intel-updater": "grok-4.7[context=256k,reasoning_effort=low,fast=false]",
+    "gsd-mempalace-curator": "composer-2.5",
+    "gsd-user-profiler": "grok-4.7[context=256k,reasoning_effort=low,fast=false]"
+  },
+  "commit_docs": true,
+  "parallelization": true,
+  "quick_branch_template": null,
+  "workflow": {
+    "research": true,
+    "plan_check": true,
+    "verifier": true,
+    "auto_advance": true,
+    "nyquist_validation": true,
+    "pattern_mapper": true,
+    "ui_phase": true,
+    "ui_safety_gate": true,
+    "ai_integration_phase": true,
+    "tdd_mode": true,
+    "code_review": true,
+    "code_review_depth": "deep",
+    "ui_review": true,
+    "skip_discuss": true,
+    "compact_content": false,
+    "research_before_questions": true,
+    "use_worktrees": true
+  },
+  "plan_review": {
+    "source_grounding": true
+  },
+  "intel": {
+    "enabled": true
+  },
+  "graphify": {
+    "enabled": true,
+    "auto_update": true
+  },
+  "git": {
+    "branching_strategy": "none",
+    "create_tag": true,
+    "quick_branch_template": null
+  },
+  "hooks": {
+    "context_warnings": true
+  },
+  "resolve_model_ids": "omit",
+  "runtime": "codex"
+}
