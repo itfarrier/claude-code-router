@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.0
 current_phase: 01
 current_phase_name: Shelves
-status: planning
-stopped_at: Phase 1 plans revised in place. Still 3 plans. Next step is `/gsd-execute-phase 1`.
-last_updated: "2026-11-14T16:59:16.962Z"
+status: executing
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-11-14T17:07:53.724Z"
 last_activity: 2026-11-14
-last_activity_desc: "Phase 1 plan 03 revised: the catalog RED commit exports compiling stubs so the named test fails on the stored-window assertion"
-state_head: 7735aa1679fe95de7366058008200aa9b1c04726
+last_activity_desc: Phase 01 execution started
+state_head: f018f073c06a22e5055f73c31769373473764312
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
 milestone_name: Automatic class switch
 ---
 
@@ -24,14 +24,14 @@ milestone_name: Automatic class switch
 See: .planning/PROJECT.md (updated 2026-11-14)
 
 **Core value:** Claude Code orders a class. CCR serves the strongest live model in that class, and Claude does not fail when that class is empty.
-**Current focus:** Phase 1: Shelves
+**Current focus:** Phase 01 — Shelves
 
 ## Current Position
 
-Phase: 01 (Shelves) — READY TO EXECUTE
-Plan: — of 3
+Phase: 01 (Shelves) — EXECUTING
+Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-11-14 — Phase 1 plan 03 revised: the catalog RED commit exports compiling stubs so the named test fails on the stored-window assertion
+Last activity: 2026-11-14 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -55,6 +55,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01-shelves P01 | 12min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -69,6 +74,7 @@ Recent decisions affecting current work:
 - Bench time comes from the provider response. Catalog refresh stays at 10 minutes. `CCR_CLASS_SWITCH=0` matches parent behavior.
 - Chat `c398a042-f199-48a6-afb9-9480889e3f22` gaps are now in the v1 requirements and phase criteria: weight renormalization, tier words `fable`/`astra`, `opus`/`sol`, `sonnet`/`terra`, `haiku`/`luna`, bench scope, unchecked model below a confirmed one, `safeguards` on the notice, `tool_result` images, and the real `/v1/models` window.
 - PR #1179 stays superseded by `.planning/research/FORK-SEAMS.md`. TUNE-01 and TUNE-02 are out of scope. They were not in the source chat.
+- [Phase 01-shelves]: Score helpers ship in RED so tracer asserts 50.3375 before applyShelf opens shelf
 
 ### Pending Todos
 
@@ -88,6 +94,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-14
-Stopped at: Phase 1 plans revised in place. Still 3 plans. Next step is `/gsd-execute-phase 1`.
+Last session: 2026-11-14T17:07:53.700Z
+Stopped at: Completed 01-01-PLAN.md
 Resume file: None
