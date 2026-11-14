@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { isBenched, recordClassSuccess, resetClassSwitchBenchForTest } from "@ccr/core/class-switch/bench.ts";
+import {
+  benchRowUntil,
+  isBenched,
+  recordClassSuccess,
+  resetClassSwitchBenchForTest
+} from "@ccr/core/class-switch/bench.ts";
 import {
   attemptsForClass,
   liftToolResultImages,
@@ -1257,4 +1262,46 @@ test("a 429 on one shelf model does not skip the next model for that credential"
       resetGatewayBench();
     }
   );
+});
+
+test("a class 2xx updates the bench without a session id", async () => {
+  await withClassGateway(twinModelShelf(), async () => {
+    const config = gatewayChoiceConfig();
+    const upstreamUrl = "http://127.0.0.1:3456/v1/messages";
+    const classInput = {
+      body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+      config,
+      coreAuthToken: "core-token",
+      fallback: { mode: "off", models: [], retryCount: 0 },
+      headers: {},
+      method: "POST",
+      path: "/v1/messages",
+      routedModel: "claude-opus-4-6",
+      upstreamUrl
+    };
+    const calls = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (_url, init) => {
+      calls.push(fetchInitHeaders(init));
+      return new Response("{}", {
+        headers: {
+          "content-type": "application/json",
+          "x-ratelimit-remaining-requests": "0",
+          "x-ratelimit-reset-requests": "7.66s"
+        },
+        status: 200
+      });
+    };
+    try {
+      await fetchUpstreamWithFallback(classInput);
+      // No session id anywhere: the zero-remaining 2xx still parks key-1.
+      assert.notEqual(benchRowUntil("BenchProvider", "key-1", "alpha/model-a"), undefined);
+      await fetchUpstreamWithFallback(classInput);
+      // The next request therefore starts on the second credential.
+      assert.match(String(calls[1]["x-target-providers"]), /cred-second/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    resetGatewayBench();
+  });
 });
