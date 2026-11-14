@@ -1,3 +1,4 @@
+import { startBench, stopBench } from "@ccr/core/class-switch/bench";
 import {
   contextWindowForProviderModel,
   readShelfSnapshot,
@@ -177,10 +178,12 @@ export function start(config: AppConfig): void {
     return;
   }
   startClassSwitchCatalog(config, { loadConfig: loadAppConfig });
+  startBench(config, { loadConfig: loadAppConfig });
 }
 
 export function stop(): void {
   stopClassSwitchCatalog();
+  stopBench();
 }
 
 export { recordClassRefusal } from "@ccr/core/class-switch/bench";
