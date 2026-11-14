@@ -64,26 +64,26 @@ Rules and numbers are locked in `.planning/research/IMPORTED-DESIGN.md` from Cur
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SHELF-01 | — | Pending |
-| SHELF-02 | — | Pending |
-| SHELF-03 | — | Pending |
-| CHOICE-01 | — | Pending |
-| CHOICE-02 | — | Pending |
-| BENCH-01 | — | Pending |
-| BENCH-02 | — | Pending |
-| BACK-01 | — | Pending |
-| BACK-02 | — | Pending |
-| FALL-01 | — | Pending |
-| FALL-02 | — | Pending |
-| FALL-03 | — | Pending |
-| SAFE-01 | — | Pending |
-| SAFE-02 | — | Pending |
+| SHELF-01 | Phase 1 | Pending |
+| SHELF-02 | Phase 1 | Pending |
+| SHELF-03 | Phase 1 | Pending |
+| CHOICE-01 | Phase 2 | Pending |
+| CHOICE-02 | Phase 2 | Pending |
+| BENCH-01 | Phase 2 | Pending |
+| BENCH-02 | Phase 2 | Pending |
+| BACK-01 | Phase 1 | Pending |
+| BACK-02 | Phase 2 | Pending |
+| FALL-01 | Phase 3 | Pending |
+| FALL-02 | Phase 3 | Pending |
+| FALL-03 | Phase 3 | Pending |
+| SAFE-01 | Phase 2 | Pending |
+| SAFE-02 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14 ⚠️
+- Mapped to phases: 14
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-11-14*
-*Last updated: 2026-11-14 after initial definition*
+*Last updated: 2026-11-14 after roadmap traceability*
