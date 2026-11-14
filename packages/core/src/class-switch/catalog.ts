@@ -20,6 +20,7 @@ import {
 import { providerModelAutoRefreshIntervalMs } from "@ccr/core/providers/model-auto-refresh";
 import { probeGatewayProvider } from "@ccr/core/providers/probe";
 import { providerRuntimeId } from "@ccr/core/routing/model-registry";
+import { loadAppConfig } from "@ccr/core/config/config";
 import { resolveRuntimeDataDir } from "@ccr/core/runtime/app-paths";
 
 export type ShelfClass = "fable" | "opus" | "sonnet" | "haiku";
@@ -68,6 +69,10 @@ export type ClassifyResult =
     };
 
 export type OpenRouterModelRow = {
+  architecture?: {
+    modality?: string;
+    output_modalities?: string[];
+  };
   benchmarks?: { artificial_analysis?: ArtificialAnalysisIndexes };
   canonical_slug?: string;
   context_length?: number;
@@ -218,7 +223,7 @@ function presentIndexCount(indexes: ArtificialAnalysisIndexes | undefined): numb
   ).length;
 }
 
-export function classForScore(score: number, presentIndexCount = 3): ShelfClass | undefined {
+export function classForScore(score: number, presentIndexCount = 3): ShelfClass {
   let shelfClass: ShelfClass;
   if (score >= 62) {
     shelfClass = "fable";
@@ -244,7 +249,9 @@ function shelfFromTierOnly(tierClasses: ShelfClass[]): ClassifyResult {
     return { kind: "shelf", class: tierClass, tierClass };
   }
   const higher = tierClasses.reduce((left, right) => higherShelfClass(left, right));
-  const lower = tierClasses.find((tier) => tier !== higher) ?? higher;
+  const lower = tierClasses.reduce((left, right) =>
+    SHELF_CLASS_ORDER.indexOf(left) > SHELF_CLASS_ORDER.indexOf(right) ? left : right
+  );
   const distance = classDistance(higher, lower);
   if (distance > 1) {
     return {
@@ -274,9 +281,6 @@ export function classifyModel(input: ClassifyInput): ClassifyResult {
   }
 
   const scoreClass = classForScore(score, presentCount);
-  if (!scoreClass) {
-    return shelfFromTierOnly(tierClasses);
-  }
 
   if (!tierClasses.length) {
     return { kind: "shelf", class: scoreClass, score };
@@ -357,6 +361,22 @@ function isShelfSnapshot(value: unknown): value is ShelfSnapshot {
       }
     }
   }
+  for (const row of snapshot.excluded) {
+    if (!row || typeof row !== "object") {
+      return false;
+    }
+    if (typeof row.provider !== "string" || typeof row.model !== "string") {
+      return false;
+    }
+  }
+  for (const row of snapshot.review) {
+    if (!row || typeof row !== "object") {
+      return false;
+    }
+    if (typeof row.provider !== "string" || typeof row.model !== "string") {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -410,6 +430,7 @@ type ClassSwitchCatalogProbe = typeof probeGatewayProvider;
 
 export type ClassSwitchCatalogOptions = {
   fetchScores?: () => Promise<{ ok: boolean; rows: OpenRouterModelRow[] }>;
+  loadConfig?: () => Promise<AppConfig>;
   logger?: Pick<Console, "warn">;
   probeProvider?: ClassSwitchCatalogProbe;
   schedule?: (delayMs: number, run: () => void | Promise<void>) => void;
@@ -542,6 +563,62 @@ function copyProviderRows(target: ShelfSnapshot, source: ShelfSnapshot, provider
   target.review.push(...source.review.filter((row) => row.provider === providerName));
 }
 
+type PriorShelfPlacement =
+  | ({ placement: "shelf"; shelfClass: ShelfClass } & ShelfRow)
+  | ({ placement: "excluded" } & ShelfSnapshot["excluded"][number])
+  | ({ placement: "review" } & ShelfSnapshot["review"][number]);
+
+function findPreviousRow(
+  snapshot: ShelfSnapshot,
+  providerName: string,
+  model: string
+): PriorShelfPlacement | undefined {
+  for (const shelfClass of SHELF_CLASS_ORDER) {
+    const row = snapshot.shelves[shelfClass].find((entry) => entry.provider === providerName && entry.model === model);
+    if (row) {
+      return { placement: "shelf", shelfClass, ...row };
+    }
+  }
+  const excluded = snapshot.excluded.find((entry) => entry.provider === providerName && entry.model === model);
+  if (excluded) {
+    return { placement: "excluded", ...excluded };
+  }
+  const review = snapshot.review.find((entry) => entry.provider === providerName && entry.model === model);
+  if (review) {
+    return { placement: "review", ...review };
+  }
+  return undefined;
+}
+
+function placePreviousRow(snapshot: ShelfSnapshot, prior: PriorShelfPlacement, contextWindow?: number): void {
+  const { placement, ...row } = prior;
+  const next: ShelfRow = {
+    provider: row.provider,
+    model: row.model,
+    ...(row.score !== undefined ? { score: row.score } : {}),
+    ...(row.tierClass ? { tierClass: row.tierClass } : {}),
+    ...(contextWindow !== undefined
+      ? { contextWindow }
+      : row.contextWindow !== undefined
+        ? { contextWindow: row.contextWindow }
+        : {})
+  };
+  if (placement === "shelf") {
+    snapshot.shelves[prior.shelfClass].push(next);
+    return;
+  }
+  if (placement === "excluded") {
+    snapshot.excluded.push({ ...next, reason: prior.reason });
+    return;
+  }
+  snapshot.review.push({
+    ...next,
+    reason: prior.reason,
+    scoreClass: prior.scoreClass,
+    tierClass: prior.tierClass
+  });
+}
+
 function placeClassifyResult(snapshot: ShelfSnapshot, base: ShelfRow, result: ClassifyResult): void {
   if (result.kind === "shelf") {
     snapshot.shelves[result.class].push({
@@ -641,10 +718,12 @@ async function fetchOpenRouterScoreRows(
 }
 
 function classifyProviderModels(
-  config: AppConfig,
+  _config: AppConfig,
   provider: GatewayProviderConfig,
   modelIds: string[],
   scoreRows: OpenRouterModelRow[] | undefined,
+  previous: ShelfSnapshot,
+  scoresFailed: boolean,
   target: ShelfSnapshot
 ): void {
   const providerName = provider.name?.trim() ?? "";
@@ -663,10 +742,18 @@ function classifyProviderModels(
       openRouterContextLength: openRouterRow?.context_length,
       openRouterTopProviderContextLength: openRouterRow?.top_provider?.context_length
     });
+    const prior = scoresFailed ? findPreviousRow(previous, providerName, model) : undefined;
+    if (scoresFailed && prior) {
+      placePreviousRow(target, prior, window);
+      continue;
+    }
     const base: ShelfRow = window ? { model, provider: providerName, contextWindow: window } : { model, provider: providerName };
+    const architecture = openRouterRow?.architecture;
     const classified = classifyModel({
       artificialAnalysis: openRouterRow?.benchmarks?.artificial_analysis,
+      architectureModality: architecture?.modality,
       model,
+      outputModalities: architecture?.output_modalities,
       provider: providerName
     });
     placeClassifyResult(target, base, classified);
@@ -679,7 +766,7 @@ function buildSeedSnapshot(config: AppConfig): ShelfSnapshot {
     if (!isGatewayProviderEnabled(provider)) {
       continue;
     }
-    classifyProviderModels(config, provider, provider.models ?? [], undefined, snapshot);
+    classifyProviderModels(config, provider, provider.models ?? [], undefined, snapshot, false, snapshot);
   }
   snapshot.updatedAt = new Date().toISOString();
   return snapshot;
@@ -702,6 +789,7 @@ export async function refreshClassShelves(
   const probeProvider = options.probeProvider ?? probeGatewayProvider;
   const previous = readShelfSnapshot() ?? emptyShelfSnapshot();
   const scoreRows = await fetchOpenRouterScoreRows(config, options);
+  const scoresFailed = scoreRows === undefined;
   const snapshot = emptyShelfSnapshot();
 
   for (const provider of config.Providers) {
@@ -727,7 +815,7 @@ export async function refreshClassShelves(
         copyProviderRows(snapshot, previous, providerName);
         continue;
       }
-      classifyProviderModels(config, provider, probe.models, scoreRows, snapshot);
+      classifyProviderModels(config, provider, probe.models, scoreRows, previous, scoresFailed, snapshot);
     } catch (error) {
       options.logger?.warn?.(`[class-switch] Failed to refresh models for ${providerName}: ${formatCatalogError(error)}`);
       copyProviderRows(snapshot, previous, providerName);
@@ -762,7 +850,9 @@ function scheduleCatalogWalk(
   const schedule = options.schedule ?? defaultCatalogSchedule;
   schedule(delayMs, async () => {
     try {
-      await refreshClassShelves(config, options);
+      const loadConfig = options.loadConfig ?? loadAppConfig;
+      const latest = await loadConfig();
+      await refreshClassShelves(latest, options);
     } catch (error) {
       options.logger?.warn?.(`[class-switch] Catalog refresh failed: ${formatCatalogError(error)}`);
     }
