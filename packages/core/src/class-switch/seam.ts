@@ -26,10 +26,15 @@ import { modelRegistryForConfig, type ModelRegistry } from "@ccr/core/routing/mo
 
 export type RouteExecutionPlanInput = {
   bodyModel?: string;
+  estimatedTokens?: number;
   fallback: RouterFallbackConfig;
+  hasImage?: boolean;
   hasRequestBody: boolean;
   modelRegistry?: ModelRegistry;
   primaryModel?: string;
+  sessionId?: string;
+  toolNames?: string[];
+  toolTurn?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -188,7 +193,13 @@ export function applyShelf(plan: RouteExecutionPlan, input: RouteExecutionPlanIn
   if (!parsed) {
     return plan;
   }
-  const attempts = attemptsForClass(parsed, input.modelRegistry);
+  const attempts = attemptsForClass(parsed, input.modelRegistry, {
+    estimatedTokens: input.estimatedTokens ?? 0,
+    hasImage: input.hasImage ?? false,
+    sessionId: input.sessionId,
+    toolNames: input.toolNames ?? [],
+    toolTurn: input.toolTurn ?? false
+  });
   if (!attempts) {
     return plan;
   }

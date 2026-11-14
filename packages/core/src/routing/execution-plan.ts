@@ -2,17 +2,11 @@ import {
   ROUTER_FALLBACK_MAX_RETRY_COUNT,
   type RouterFallbackConfig
 } from "@ccr/core/contracts/app";
-import { applyShelf } from "@ccr/core/class-switch/seam";
+import { applyShelf, type RouteExecutionPlanInput } from "@ccr/core/class-switch/seam";
 import type { RouteExecutionPlan } from "@ccr/core/routing/contracts";
 import { type ModelRegistry, normalizeRouteSelector } from "@ccr/core/routing/model-registry";
 
-export function createRouteExecutionPlan(input: {
-  bodyModel?: string;
-  fallback: RouterFallbackConfig;
-  hasRequestBody: boolean;
-  modelRegistry?: ModelRegistry;
-  primaryModel?: string;
-}): RouteExecutionPlan {
+export function createRouteExecutionPlan(input: RouteExecutionPlanInput): RouteExecutionPlan {
   const primaryModel = normalizeRouteSelector(input.bodyModel) ?? normalizeRouteSelector(input.primaryModel);
   let plan: RouteExecutionPlan;
   if (input.fallback.mode === "off" || !input.hasRequestBody) {
