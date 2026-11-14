@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 Phase: 1 of 3 (Shelves)
 Plan: — of TBD
 Status: Ready to plan
-Last activity: 2026-11-14 — Roadmap created for v1.0 Automatic class switch
+Last activity: 2026-11-14 — Fork-seam design saved in `.planning/research/FORK-SEAMS.md`
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -60,8 +60,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - Four classes stay Fable, Opus, Sonnet, and Haiku. Score weights stay 0.50 / 0.30 / 0.20. Cuts stay 62 / 50 / 28.
-- Dynamic attempts go in the existing loop. Do not add a second router or rebuild the Claude settings door.
-- Bench time comes from the provider response. Catalog refresh stays at 10 minutes.
+- Class-switch code lives in `packages/core/src/class-switch/`. Parent files get only the seam calls in `.planning/research/FORK-SEAMS.md`. Do not rewrite the request loop, `credential-pool.ts`, or the Claude settings door.
+- A class request replaces the attempt list at the end of `createRouteExecutionPlan`. The parent loop walks that list.
+- Bench time comes from the provider response. Catalog refresh stays at 10 minutes. `CCR_CLASS_SWITCH=0` matches parent behavior.
 - v2 tuning (TUNE-01, TUNE-02) stays off this roadmap.
 
 ### Pending Todos
@@ -83,5 +84,5 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-14
-Stopped at: Roadmap written for v1.0 Automatic class switch (3 phases, 14 requirements)
+Stopped at: Fork-seam design saved. Roadmap is still 3 phases and 14 requirements. Next step is planning Phase 1.
 Resume file: None

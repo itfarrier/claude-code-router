@@ -4,6 +4,8 @@
 
 Claude Code orders a class. This milestone makes CCR put each model on the right shelf, serve the strongest live provider, token, and model for that class, and still return a Claude success when the shelf is empty. The user sees one notice for that swap. The Claude settings door is already validated and is not a phase.
 
+Code placement is locked in `.planning/research/FORK-SEAMS.md`. Phases add `packages/core/src/class-switch/` and the seam calls. They do not rewrite the parent request loop or `credential-pool.ts`.
+
 ## Phases
 
 **Phase Numbering:**

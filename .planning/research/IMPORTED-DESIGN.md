@@ -109,16 +109,13 @@ A Claude request only reads the table. Two walks and the Claude responses write 
 
 ## Where the code goes
 
-Rules live in one place: class, score, bench, triple choice, notice text. CCR calls that place.
+The placement is locked in `.planning/research/FORK-SEAMS.md`. This section is only the pointer.
+
+Rules live in `packages/core/src/class-switch/`. The parent request loop stays the parent's. A class request replaces the attempt list at the end of `createRouteExecutionPlan`. The parent loop walks that list. There is no second call into the policy on each refusal.
 
 `CUSTOM_ROUTER_PATH` runs once before the request and can return only a model name that is already configured. It cannot retry or pick a token. Do not use it as the whole design.
 
-Insert one hook in the request loop: before the first token, on refusal, call the rules again and pass the triples already tried.
-
-Reuse:
-
-- `packages/core/src/routing/execution-plan.ts` for the attempt loop. Replace the static `fallback.models` list with the dynamic list. The user's current mode is `off`.
-- `packages/core/src/providers/credential-pool.ts` and the executor for several keys and pause records. Verify that 429, 401, 403, and 5xx actually move to the next key. Parent issue #1923 says an old version did this and then lost it. Do not assume the fork already does the move.
+`credential-pool.ts` stays unchanged. Its 60-second cooldown remains the old path. The class bench is `class-switch/bench.ts`. Phase 2 still has to check that a 429, 401, 403, or 5xx moves to the next key. Parent issue #1923 says an older version did this and then lost it. Do not assume the fork already does the move.
 
 Cooldown-table ideas may be copied from [free-llm-proxy-router](https://github.com/kaiser-data/free-llm-proxy-router) (MIT). Catalog walk ideas may be copied from freellmapi-extended (MIT). The four classes and the cuts 62 / 50 / 28 are not in those projects.
 
@@ -133,7 +130,7 @@ Reviewed in the source chat: 1420 issues, 497 pull requests, 19 discussions. Ful
 | Same request, next key, honor `Retry-After`, do not log the key | issue #1923, also #1108, #84, PR #1304. Verify on this fork |
 | Response body keeps the requested model | issue #1861, PR #1901 |
 | Served model in headers `x-ccr-requested-model` and `x-ccr-served-model` | issue #1927 |
-| Error hook for a second call | PR #1179. This is the retry `CUSTOM_ROUTER_PATH` does not have |
+| Error hook for a second call | PR #1179. Superseded by `.planning/research/FORK-SEAMS.md`: the attempt list is built once, and the parent loop walks it. Do not add a second policy call inside the loop |
 | z.ai `next_flush_time` | PR #1926 |
 | Images inside `tool_result` survive protocol translation | PR #1958, issue #1678 |
 | A log line per attempt leg | PR #1773 |

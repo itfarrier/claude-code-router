@@ -5,6 +5,8 @@
 
 Rules and numbers are locked in `.planning/research/IMPORTED-DESIGN.md` from Cursor chat `9cf95ff9-5d84-4b2b-adf4-165be1f6ff9b`.
 
+Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New code goes in `packages/core/src/class-switch/`. Parent files receive only the seam calls listed there. `credential-pool.ts` and the request loop stay the parent's.
+
 ## v1 Requirements
 
 ### Shelves
@@ -86,4 +88,4 @@ Rules and numbers are locked in `.planning/research/IMPORTED-DESIGN.md` from Cur
 
 ---
 *Requirements defined: 2026-11-14*
-*Last updated: 2026-11-14 after roadmap traceability*
+*Last updated: 2026-11-14 after the fork-seam design*
