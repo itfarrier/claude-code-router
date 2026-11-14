@@ -1,11 +1,23 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   classifyModel,
   classForScore,
   matchOpenRouterModel,
-  scoreArtificialAnalysis
+  readShelfSnapshot,
+  refreshClassShelves,
+  scoreArtificialAnalysis,
+  seedShelvesFromConfig,
+  shelfSnapshotPath,
+  startClassSwitchCatalog,
+  stopClassSwitchCatalog
 } from "@ccr/core/class-switch/catalog.ts";
+import { providerModelAutoRefreshIntervalMs } from "@ccr/core/providers/model-auto-refresh.ts";
+import { createRouteExecutionPlan } from "@ccr/core/routing/execution-plan.ts";
+import { ModelRegistry } from "@ccr/core/routing/model-registry.ts";
 
 function classify(provider, model, artificialAnalysis, extra = {}) {
   return classifyModel({ provider, model, artificialAnalysis, ...extra });
@@ -211,4 +223,160 @@ test("gemini hydride one-index fable token waits in review", () => {
   assert.equal(result.scoreClass, "sonnet");
   assert.equal(result.tierClass, "fable");
   assert.notEqual(result.kind, "shelf");
+});
+
+function benchRefreshConfig() {
+  return {
+    Providers: [
+      {
+        api_base_url: "https://bench.provider/v1",
+        api_key: "sk-bench-test-key",
+        models: ["gpt-5.6-sol", "stale-model"],
+        modelMetadata: {
+          "gpt-5.6-sol": { contextWindow: 1_000_000 }
+        },
+        name: "BenchProvider",
+        type: "openai_chat_completions"
+      }
+    ],
+    profile: { enabled: true, profiles: [] },
+    virtualModelProfiles: []
+  };
+}
+
+async function withShelfTempDir(run) {
+  const previousDataDir = process.env.CCR_INTERNAL_USER_DATA_DIR;
+  const dir = mkdtempSync(path.join(tmpdir(), "ccr-class-shelf-refresh-"));
+  try {
+    process.env.CCR_INTERNAL_USER_DATA_DIR = dir;
+    await run(dir);
+  } finally {
+    rmSync(dir, { force: true, recursive: true });
+    if (previousDataDir === undefined) {
+      delete process.env.CCR_INTERNAL_USER_DATA_DIR;
+    } else {
+      process.env.CCR_INTERNAL_USER_DATA_DIR = previousDataDir;
+    }
+  }
+}
+
+function opusOneMillionPlan(config) {
+  const registry = new ModelRegistry({
+    Providers: config.Providers,
+    virtualModelProfiles: config.virtualModelProfiles ?? []
+  });
+  return createRouteExecutionPlan({
+    bodyModel: "opus[1m]",
+    fallback: { mode: "off", models: [], retryCount: 0 },
+    hasRequestBody: true,
+    modelRegistry: registry,
+    primaryModel: "opus[1m]"
+  });
+}
+
+test("catalog refresh drops a missing model and keeps a failed provider", async () => {
+  const config = benchRefreshConfig();
+  await withShelfTempDir(async () => {
+    await seedShelvesFromConfig(config);
+    const seeded = readShelfSnapshot();
+    const seededOpus = seeded?.shelves.opus.find((row) => row.model === "gpt-5.6-sol");
+    assert.equal(seededOpus?.contextWindow, 1_000_000);
+
+    let plan = opusOneMillionPlan(config);
+    assert.equal(plan.attempts[0]?.model, "BenchProvider/gpt-5.6-sol");
+
+    await refreshClassShelves(config, {
+      probeProvider: async () => {
+        throw new Error("probe failed");
+      }
+    });
+    const afterThrow = readShelfSnapshot();
+    const kept = afterThrow?.shelves.opus.find((row) => row.model === "gpt-5.6-sol");
+    assert.equal(kept?.contextWindow, 1_000_000);
+    plan = opusOneMillionPlan(config);
+    assert.equal(plan.attempts[0]?.model, "BenchProvider/gpt-5.6-sol");
+
+    const probeCalls = [];
+    await refreshClassShelves(config, {
+      fetchScores: async () => ({
+        ok: true,
+        rows: [{ benchmarks: { artificial_analysis: { intelligence_index: 53.9 } }, id: "google/gemini-4-fable" }]
+      }),
+      probeProvider: async (request) => {
+        probeCalls.push(request);
+        return {
+          capabilities: [],
+          models: ["gpt-5.6-sol", "google/gemini-4-fable"],
+          normalizedBaseUrl: request.baseUrl,
+          protocols: []
+        };
+      }
+    });
+    assert.equal(probeCalls.length, 1);
+    assert.equal(probeCalls[0].mode, "models");
+    assert.equal(probeCalls[0].forceRefresh, true);
+    assert.equal(JSON.stringify(probeCalls[0]).includes("ping"), false);
+
+    const snapshot = readShelfSnapshot();
+    assert.ok(snapshot);
+    assert.equal(snapshot.shelves.opus.some((row) => row.model === "stale-model"), false);
+    const reviewRow = snapshot.review.find((row) => row.model === "google/gemini-4-fable");
+    assert.equal(reviewRow?.reason, "score-tier-disagree");
+    for (const shelfClass of ["fable", "opus", "sonnet", "haiku"]) {
+      assert.equal(snapshot.shelves[shelfClass].some((row) => row.model === "google/gemini-4-fable"), false);
+    }
+    const solRow = snapshot.shelves.opus.find((row) => row.model === "gpt-5.6-sol");
+    assert.equal(solRow?.contextWindow, 1_000_000);
+    plan = opusOneMillionPlan(config);
+    assert.equal(plan.attempts[0]?.model, "BenchProvider/gpt-5.6-sol");
+
+    const snapshotText = readFileSync(shelfSnapshotPath(), "utf8");
+    assert.equal(snapshotText.includes("sk-bench-test-key"), false);
+    assert.deepEqual(config.Providers[0].models, ["gpt-5.6-sol", "stale-model"]);
+  });
+});
+
+test("class switch catalog schedules zero then the provider refresh interval", async () => {
+  const delays = [];
+  let resolveDone;
+  const done = new Promise((resolve) => {
+    resolveDone = resolve;
+  });
+  const config = benchRefreshConfig();
+  await withShelfTempDir(async () => {
+    startClassSwitchCatalog(config, {
+      fetchScores: async () => ({ ok: true, rows: [] }),
+      probeProvider: async () => ({ capabilities: [], models: ["gpt-5.6-sol"], protocols: [] }),
+      schedule(delayMs, run) {
+        delays.push(delayMs);
+        if (delays.length === 1) {
+          void run().then(() => resolveDone());
+        }
+      }
+    });
+    await done;
+    assert.deepEqual(delays, [0, providerModelAutoRefreshIntervalMs]);
+    stopClassSwitchCatalog();
+  });
+});
+
+test("CCR_CLASS_SWITCH=0 does not schedule the shelf catalog walk", () => {
+  const previous = process.env.CCR_CLASS_SWITCH;
+  const delays = [];
+  try {
+    process.env.CCR_CLASS_SWITCH = "0";
+    startClassSwitchCatalog(benchRefreshConfig(), {
+      schedule(delayMs) {
+        delays.push(delayMs);
+      }
+    });
+    assert.equal(delays.length, 0);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.CCR_CLASS_SWITCH;
+    } else {
+      process.env.CCR_CLASS_SWITCH = previous;
+    }
+    stopClassSwitchCatalog();
+  }
 });
