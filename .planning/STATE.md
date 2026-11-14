@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 02
 current_phase_name: Live choice
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-11-14T20:39:06.132Z"
+stopped_at: Completed 02-live-choice-02-03-PLAN.md
+last_updated: "2026-11-14T20:48:47.569Z"
 last_activity: 2026-11-14
 last_activity_desc: Phase 02 execution started
-state_head: 01465ebbb80c2e27a129b3be4f56c196985ebc7d
+state_head: ee201c3ac9d3dc7471bfcea4f8db097abfab22c4
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
 milestone_name: Automatic class switch
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 ## Current Position
 
 Phase: 02 (Live choice) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-11-14 — Phase 02 execution started
 
@@ -64,6 +64,7 @@ Progress: [██████░░░░] 67%
 | Phase 01-shelves P03 | 45min | 2 tasks | 6 files |
 | Phase 02-live-choice P01 | 25min | 2 tasks | 5 files |
 | Phase 02-live-choice P02 | 45min | 2 tasks | 4 files |
+| Phase 02-live-choice P03 | 70min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 02-live-choice]: 02-01 parks only 5xx at provider+model for 30s; other status clocks are later plans
 - [Phase 02-live-choice]: 429 without clock uses 60s shortcut and no-provider-time log line
 - [Phase 02-live-choice]: Bench probe timer is separate from catalog walk; connectivity mode with one model id
+- [Phase 02-live-choice]: Thin-share counter increments once per returned list including single-row tool turns
+- [Phase 02-live-choice]: Providers without credentials still emit one shelf attempt per model
 
 ### Pending Todos
 
@@ -111,7 +114,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-14T20:39:06.055Z
-Stopped at: Completed 02-02-PLAN.md
+Last session: 2026-11-14T20:48:47.490Z
+Stopped at: Completed 02-live-choice-02-03-PLAN.md
 Resume file: .planning/phases/01-shelves/01-UAT.md
 Phase 2 plans: .planning/phases/02-live-choice/02-01-PLAN.md through 02-04-PLAN.md. Phase 1 verification remains deferred.
