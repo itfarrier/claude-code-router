@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: Automatic class switch
 status: planning
 last_updated: "2026-11-14T13:50:00.000Z"
-last_activity: 2026-11-14
+last_activity: 2026-11-14 — Phase 1 research written
 progress:
   total_phases: 3
   completed_phases: 0
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 Phase: 1 of 3 (Shelves)
 Plan: — of TBD
 Status: Ready to plan
-Last activity: 2026-11-14 — Plan corrected from chat c398a042-f199-48a6-afb9-9480889e3f22
+Last activity: 2026-11-14 — Phase 1 research written to `.planning/phases/01-shelves/01-RESEARCH.md`
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -85,5 +85,5 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-14
-Stopped at: Plan corrected from chat c398a042. Still 3 phases and 14 requirements. Next step is planning Phase 1.
+Stopped at: Phase 1 research is written. Still 3 phases and 14 requirements. Next step is planning Phase 1.
 Resume file: None
