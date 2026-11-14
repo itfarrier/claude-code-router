@@ -387,6 +387,19 @@ export function contextWindowForProviderModel(
   return undefined;
 }
 
+export async function seedShelvesFromConfig(_config: unknown): Promise<void> {}
+
+export async function refreshClassShelves(
+  _config: unknown,
+  _options?: unknown
+): Promise<ShelfSnapshot | undefined> {
+  return readShelfSnapshot();
+}
+
+export function startClassSwitchCatalog(_config: unknown, _options?: unknown): void {}
+
+export function stopClassSwitchCatalog(): void {}
+
 export async function writeShelfSnapshot(snapshot: ShelfSnapshot): Promise<void> {
   const file = shelfSnapshotPath();
   const temporaryFile = `${file}.${randomUUID()}.tmp`;
