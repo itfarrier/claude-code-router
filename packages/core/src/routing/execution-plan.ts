@@ -2,6 +2,7 @@ import {
   ROUTER_FALLBACK_MAX_RETRY_COUNT,
   type RouterFallbackConfig
 } from "@ccr/core/contracts/app";
+import { applyShelf } from "@ccr/core/class-switch/seam";
 import type { RouteExecutionPlan } from "@ccr/core/routing/contracts";
 import { type ModelRegistry, normalizeRouteSelector } from "@ccr/core/routing/model-registry";
 
@@ -13,17 +14,16 @@ export function createRouteExecutionPlan(input: {
   primaryModel?: string;
 }): RouteExecutionPlan {
   const primaryModel = normalizeRouteSelector(input.bodyModel) ?? normalizeRouteSelector(input.primaryModel);
+  let plan: RouteExecutionPlan;
   if (input.fallback.mode === "off" || !input.hasRequestBody) {
-    return {
+    plan = {
       attempts: [routeAttempt(0, primaryModel, input.modelRegistry)],
       fallback: input.fallback,
       primaryModel
     };
-  }
-
-  if (input.fallback.mode === "retry") {
+  } else if (input.fallback.mode === "retry") {
     const retryCount = clamp(input.fallback.retryCount, 0, ROUTER_FALLBACK_MAX_RETRY_COUNT);
-    return {
+    plan = {
       attempts: Array.from(
         { length: retryCount + 1 },
         (_unused, index) => routeAttempt(index, primaryModel, input.modelRegistry)
@@ -31,18 +31,19 @@ export function createRouteExecutionPlan(input: {
       fallback: input.fallback,
       primaryModel
     };
+  } else {
+    const models = uniqueStrings([
+      primaryModel,
+      ...input.fallback.models.map((model) => normalizeRouteSelector(model))
+    ]);
+    plan = {
+      attempts: (models.length ? models : [undefined])
+        .map((model, index) => routeAttempt(index, model, input.modelRegistry)),
+      fallback: input.fallback,
+      primaryModel
+    };
   }
-
-  const models = uniqueStrings([
-    primaryModel,
-    ...input.fallback.models.map((model) => normalizeRouteSelector(model))
-  ]);
-  return {
-    attempts: (models.length ? models : [undefined])
-      .map((model, index) => routeAttempt(index, model, input.modelRegistry)),
-    fallback: input.fallback,
-    primaryModel
-  };
+  return applyShelf(plan, input);
 }
 
 function routeAttempt(index: number, model: string | undefined, modelRegistry: ModelRegistry | undefined) {
