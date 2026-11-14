@@ -109,9 +109,18 @@ function rowPassesOneMillionFilter(row: ShelfRow, requireOneMillion: boolean): b
   return typeof row.contextWindow === "number" && Number.isFinite(row.contextWindow) && row.contextWindow >= 1_000_000;
 }
 
+export type AttemptsForClassScalars = {
+  toolNames?: string[];
+  hasImage?: boolean;
+  estimatedTokens?: number;
+  toolTurn?: boolean;
+  sessionId?: string;
+};
+
 export function attemptsForClass(
   parsed: ParsedClassRequest,
-  modelRegistry: ModelRegistry | undefined
+  modelRegistry: ModelRegistry | undefined,
+  _scalars?: AttemptsForClassScalars
 ): RouteAttemptPlan[] | undefined {
   const snapshot = readShelfSnapshot();
   if (!snapshot) {
