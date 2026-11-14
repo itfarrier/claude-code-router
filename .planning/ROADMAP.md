@@ -32,8 +32,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 3 plans
 
 Plans:
+**Wave 1**
 - [ ] 01-01-PLAN.md — Open a class shelf from the end of createRouteExecutionPlan
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 01-02-PLAN.md — Place a model by score, tier word, exclusion, and review distance
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 01-03-PLAN.md — Refresh shelves every 10 minutes and report the real context window
 
 ### Phase 2: Live choice

@@ -1,16 +1,20 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-milestone_name: Automatic class switch
+current_phase: 01
+current_phase_name: Shelves
 status: planning
-last_updated: "2026-11-14T16:50:00.000Z"
-last_activity: 2026-11-14 — Phase 1 plan 03 revised so the catalog RED commit exports compiling stubs
+stopped_at: Phase 1 plans revised in place. Still 3 plans. Next step is `/gsd-execute-phase 1`.
+last_updated: "2026-11-14T16:59:16.962Z"
+last_activity: 2026-11-14
+last_activity_desc: "Phase 1 plan 03 revised: the catalog RED commit exports compiling stubs so the named test fails on the stored-window assertion"
+state_head: 7735aa1679fe95de7366058008200aa9b1c04726
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
   completed_plans: 0
-  percent: 0
+milestone_name: Automatic class switch
 ---
 
 # Project State
@@ -24,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 
 ## Current Position
 
-Phase: 1 of 3 (Shelves)
+Phase: 01 (Shelves) — READY TO EXECUTE
 Plan: — of 3
 Status: Ready to execute
 Last activity: 2026-11-14 — Phase 1 plan 03 revised: the catalog RED commit exports compiling stubs so the named test fails on the stored-window assertion
