@@ -12,6 +12,9 @@ export type RouteExecutionPlanInput = {
 };
 
 export function applyShelf(plan: RouteExecutionPlan, input: RouteExecutionPlanInput): RouteExecutionPlan {
+  if (process.env.CCR_CLASS_SWITCH === "0") {
+    return plan;
+  }
   const parsed = parseClassRequest(input.bodyModel ?? input.primaryModel);
   if (!parsed) {
     return plan;
