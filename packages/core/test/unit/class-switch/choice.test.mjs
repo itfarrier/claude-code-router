@@ -979,3 +979,78 @@ test("requestFacts marks toolTurn when the last user content is only tool_result
   assert.equal(facts.toolTurn, true);
   assert.equal(facts.sessionId, "meta-session");
 });
+
+test("a stopped class refusal keeps a readable body", async () => {
+  await withClassGateway(twinModelShelf(), async () => {
+    const config = gatewayChoiceConfig();
+    const singleCredConfig = {
+      ...config,
+      Providers: [{ ...config.Providers[0], credentials: [{ api_key: "sk-fixture-key-one" }] }]
+    };
+    const upstreamUrl = "http://127.0.0.1:3456/v1/messages";
+    const classBody = () =>
+      Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" }));
+    const fetchInput = (providerConfig) => ({
+      body: classBody(),
+      config: providerConfig,
+      coreAuthToken: "core-token",
+      fallback: { mode: "off", models: [], retryCount: 0 },
+      headers: {},
+      method: "POST",
+      path: "/v1/messages",
+      routedModel: "claude-opus-4-6",
+      upstreamUrl
+    });
+    const originalFetch = globalThis.fetch;
+    const refusedFetch = (payload, status) => async () =>
+      new Response(payload, {
+        headers: {
+          "content-length": String(Buffer.byteLength(payload)),
+          "content-type": "application/json"
+        },
+        status
+      });
+
+    globalThis.fetch = refusedFetch(JSON.stringify({ error: { message: "shape" } }), 400);
+    try {
+      const shapeRefusal = await fetchUpstreamWithFallback(fetchInput(singleCredConfig));
+      assert.equal(shapeRefusal.response.status, 400);
+      assert.equal(JSON.parse(await shapeRefusal.response.text()).error.message, "shape");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    resetGatewayBench();
+    globalThis.fetch = refusedFetch(JSON.stringify({ error: { message: "rate limited" } }), 429);
+    try {
+      const rateRefusal = await fetchUpstreamWithFallback(fetchInput(singleCredConfig));
+      assert.equal(rateRefusal.response.status, 429);
+      assert.equal(JSON.parse(await rateRefusal.response.text()).error.message, "rate limited");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    resetGatewayBench();
+    setThinShareCounter(0);
+    await writeShelfSnapshot({
+      excluded: [],
+      review: [],
+      shelves: {
+        ...emptyShelves(),
+        opus: [
+          { model: "alpha/model-a", provider: "BenchProvider", score: 80 },
+          { model: "alpha/model-a", provider: "BenchProvider", score: 79 }
+        ]
+      },
+      updatedAt: new Date().toISOString()
+    });
+    globalThis.fetch = refusedFetch(JSON.stringify({ error: { message: "rate limited" } }), 429);
+    try {
+      const skippedLeg = await fetchUpstreamWithFallback(fetchInput(config));
+      assert.equal(skippedLeg.response.status, 429);
+      assert.equal(JSON.parse(await skippedLeg.response.text()).error.message, "rate limited");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
