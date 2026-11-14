@@ -280,6 +280,12 @@ function benchRefreshConfig() {
   };
 }
 
+function benchConfigWithModels(models) {
+  const config = benchRefreshConfig();
+  config.Providers[0].models = models;
+  return config;
+}
+
 async function withShelfTempDir(run) {
   const previousDataDir = process.env.CCR_INTERNAL_USER_DATA_DIR;
   const dir = mkdtempSync(path.join(tmpdir(), "ccr-class-shelf-refresh-"));
@@ -437,6 +443,72 @@ test("catalog refresh drops a missing model and keeps a failed provider", async 
     const snapshotText = readFileSync(shelfSnapshotPath(), "utf8");
     assert.equal(snapshotText.includes("sk-bench-test-key"), false);
     assert.deepEqual(config.Providers[0].models, ["gpt-5.6-sol", "stale-model"]);
+  });
+});
+
+test("config save during shelf refresh runs follow-up pass with newer snapshot", async () => {
+  const loads = [];
+  let configTag = "initial";
+  const initialConfig = benchConfigWithModels(["stale-marker"]);
+  const savedConfig = benchConfigWithModels(["fresh-marker"]);
+
+  let probePasses = 0;
+  let unblockFirstProbe;
+  const firstProbeBlocked = new Promise((resolve) => {
+    unblockFirstProbe = resolve;
+  });
+
+  const catalogOptions = {
+    fetchScores: async () => ({ ok: true, rows: [] }),
+    loadConfig: async () => {
+      loads.push(configTag);
+      return configTag === "initial" ? initialConfig : savedConfig;
+    },
+    probeProvider: async () => {
+      probePasses += 1;
+      if (probePasses === 1) {
+        await firstProbeBlocked;
+      }
+      const models = (configTag === "initial" ? initialConfig : savedConfig).Providers[0].models;
+      return { capabilities: [], models, protocols: [] };
+    },
+    schedule(delayMs, run) {
+      if (delayMs !== 0) {
+        return;
+      }
+      queueMicrotask(() => void run());
+    }
+  };
+
+  await withShelfTempDir(async () => {
+    startClassSwitchCatalog(initialConfig, catalogOptions);
+
+    while (probePasses < 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    configTag = "saved";
+    startClassSwitchCatalog(savedConfig, catalogOptions);
+    unblockFirstProbe();
+
+    const deadline = Date.now() + 5_000;
+    while (loads.length < 2 && Date.now() < deadline) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.ok(loads.length >= 2, "expected a follow-up refresh after config save during walk");
+    assert.ok(loads.includes("saved"), "follow-up refresh must load saved config");
+
+    const snapshot = readShelfSnapshot();
+    assert.ok(snapshot);
+    const rows = [
+      ...snapshot.shelves.fable,
+      ...snapshot.shelves.opus,
+      ...snapshot.shelves.sonnet,
+      ...snapshot.shelves.haiku,
+      ...snapshot.excluded
+    ];
+    assert.equal(rows.some((row) => row.model === "fresh-marker"), true);
+    assert.equal(rows.some((row) => row.model === "stale-marker"), false);
+    stopClassSwitchCatalog();
   });
 });
 

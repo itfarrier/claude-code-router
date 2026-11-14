@@ -438,6 +438,9 @@ export type ClassSwitchCatalogOptions = {
 
 let catalogWalkEnabled = false;
 let catalogWalkTimer: ReturnType<typeof setTimeout> | undefined;
+let refreshInFlight: Promise<void> | undefined;
+let refreshAgain = false;
+let walkGeneration = 0;
 
 function formatCatalogError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -839,6 +842,28 @@ function defaultCatalogSchedule(delayMs: number, run: () => void | Promise<void>
   catalogWalkTimer.unref?.();
 }
 
+async function runSerializedRefresh(options: ClassSwitchCatalogOptions): Promise<void> {
+  if (refreshInFlight) {
+    refreshAgain = true;
+    await refreshInFlight;
+    if (refreshAgain && catalogWalkEnabled) {
+      return runSerializedRefresh(options);
+    }
+    return;
+  }
+  const generation = walkGeneration;
+  refreshInFlight = (async () => {
+    do {
+      refreshAgain = false;
+      const loadConfig = options.loadConfig ?? loadAppConfig;
+      await refreshClassShelves(await loadConfig(), options);
+    } while (refreshAgain && catalogWalkEnabled && generation === walkGeneration);
+  })().finally(() => {
+    refreshInFlight = undefined;
+  });
+  return refreshInFlight;
+}
+
 function scheduleCatalogWalk(
   config: AppConfig,
   options: ClassSwitchCatalogOptions,
@@ -847,16 +872,18 @@ function scheduleCatalogWalk(
   if (!catalogWalkEnabled) {
     return;
   }
+  const walkGen = walkGeneration;
   const schedule = options.schedule ?? defaultCatalogSchedule;
   schedule(delayMs, async () => {
+    if (walkGen !== walkGeneration) {
+      return;
+    }
     try {
-      const loadConfig = options.loadConfig ?? loadAppConfig;
-      const latest = await loadConfig();
-      await refreshClassShelves(latest, options);
+      await runSerializedRefresh(options);
     } catch (error) {
       options.logger?.warn?.(`[class-switch] Catalog refresh failed: ${formatCatalogError(error)}`);
     }
-    if (catalogWalkEnabled) {
+    if (catalogWalkEnabled && walkGen === walkGeneration) {
       scheduleCatalogWalk(config, options, providerModelAutoRefreshIntervalMs);
     }
   });
@@ -867,6 +894,10 @@ export function startClassSwitchCatalog(config: AppConfig, options: ClassSwitchC
     return;
   }
   catalogWalkEnabled = true;
+  walkGeneration += 1;
+  if (refreshInFlight) {
+    refreshAgain = true;
+  }
   void seedShelvesFromConfig(config)
     .catch((error) => {
       options.logger?.warn?.(`[class-switch] Shelf seed failed: ${formatCatalogError(error)}`);
