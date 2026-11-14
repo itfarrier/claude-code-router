@@ -446,6 +446,99 @@ test("catalog refresh drops a missing model and keeps a failed provider", async 
   });
 });
 
+test("config save during failed shelf refresh still runs follow-up pass", async () => {
+  const loads = [];
+  let configTag = "initial";
+  const initialConfig = benchConfigWithModels(["stale-marker"]);
+  const savedConfig = benchConfigWithModels(["fresh-marker"]);
+  const warnings = [];
+
+  let probePasses = 0;
+  let unblockFirstProbe;
+  const firstProbeBlocked = new Promise((resolve) => {
+    unblockFirstProbe = resolve;
+  });
+
+  const catalogOptions = {
+    fetchScores: async () => ({ ok: true, rows: [] }),
+    loadConfig: async () => {
+      loads.push(configTag);
+      if (configTag === "saved") {
+        const cacheDir = path.join(process.env.CCR_INTERNAL_USER_DATA_DIR, "cache");
+        rmSync(cacheDir, { force: true });
+        mkdirSync(cacheDir, { recursive: true });
+      }
+      return configTag === "initial" ? initialConfig : savedConfig;
+    },
+    logger: { warn: (message) => warnings.push(message) },
+    probeProvider: async () => {
+      probePasses += 1;
+      if (probePasses === 1) {
+        await firstProbeBlocked;
+        const dataDir = process.env.CCR_INTERNAL_USER_DATA_DIR;
+        const cacheDir = path.join(dataDir, "cache");
+        rmSync(cacheDir, { force: true, recursive: true });
+        writeFileSync(cacheDir, "block");
+      }
+      const models = (configTag === "initial" ? initialConfig : savedConfig).Providers[0].models;
+      return { capabilities: [], models, protocols: [] };
+    },
+    schedule(delayMs, run) {
+      if (delayMs !== 0) {
+        return;
+      }
+      queueMicrotask(() => void run());
+    }
+  };
+
+  await withShelfTempDir(async () => {
+    startClassSwitchCatalog(initialConfig, catalogOptions);
+
+    while (probePasses < 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    configTag = "saved";
+    startClassSwitchCatalog(savedConfig, catalogOptions);
+    unblockFirstProbe();
+
+    const deadline = Date.now() + 5_000;
+    let snapshot;
+    while (Date.now() < deadline) {
+      snapshot = readShelfSnapshot();
+      const rows = snapshot
+        ? [
+            ...snapshot.shelves.fable,
+            ...snapshot.shelves.opus,
+            ...snapshot.shelves.sonnet,
+            ...snapshot.shelves.haiku,
+            ...snapshot.excluded
+          ]
+        : [];
+      if (loads.includes("saved") && rows.some((row) => row.model === "fresh-marker")) {
+        break;
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.ok(loads.length >= 2, "expected a follow-up refresh after failed in-flight walk");
+    assert.ok(loads.includes("saved"), "follow-up refresh must load saved config");
+    assert.ok(
+      warnings.some((message) => message.includes("Catalog refresh failed")),
+      "owner schedule callback should log the failed in-flight refresh"
+    );
+    assert.ok(snapshot);
+    const rows = [
+      ...snapshot.shelves.fable,
+      ...snapshot.shelves.opus,
+      ...snapshot.shelves.sonnet,
+      ...snapshot.shelves.haiku,
+      ...snapshot.excluded
+    ];
+    assert.equal(rows.some((row) => row.model === "fresh-marker"), true);
+    assert.equal(rows.some((row) => row.model === "stale-marker"), false);
+    stopClassSwitchCatalog();
+  });
+});
+
 test("config save during shelf refresh runs follow-up pass with newer snapshot", async () => {
   const loads = [];
   let configTag = "initial";
