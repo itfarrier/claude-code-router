@@ -146,3 +146,47 @@ export function attemptsForClass(
   }
   return attempts.length ? attempts : undefined;
 }
+
+let thinShareCounter = 0;
+
+export function setThinShareCounter(value: number): void {
+  thinShareCounter = value;
+}
+
+export function liftToolResultImages(body: Record<string, unknown>): Record<string, unknown> {
+  return body;
+}
+
+export type RequestFacts = {
+  estimatedTokens: number;
+  hasImage: boolean;
+  sessionId?: string;
+  toolNames: string[];
+  toolTurn: boolean;
+};
+
+export function requestFacts(_method: string, _body: Buffer): RequestFacts {
+  return { estimatedTokens: 0, hasImage: false, toolNames: [], toolTurn: false };
+}
+
+export type RememberedTriple = {
+  credentialId: string;
+  model: string;
+  provider: string;
+};
+
+const toolTurnBySession = new Map<string, RememberedTriple>();
+
+export function remember(sessionId: string | undefined, triple: RememberedTriple): void {
+  if (!sessionId?.trim()) {
+    return;
+  }
+  toolTurnBySession.set(sessionId.trim(), triple);
+}
+
+export function rememberedCredential(sessionId: string | undefined): RememberedTriple | undefined {
+  if (!sessionId?.trim()) {
+    return undefined;
+  }
+  return toolTurnBySession.get(sessionId.trim());
+}
