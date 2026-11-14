@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 01
 current_phase_name: Shelves
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-11-14T17:07:53.724Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-11-14T17:35:00.000Z"
 last_activity: 2026-11-14
-last_activity_desc: Phase 01 execution started
-state_head: f018f073c06a22e5055f73c31769373473764312
+last_activity_desc: Completed 01-02 classifier plan
+state_head: 3d69d0ab
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 milestone_name: Automatic class switch
 ---
 
@@ -30,15 +30,15 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 
 Phase: 01 (Shelves) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-11-14 — Phase 01 execution started
+Status: Ready to execute plan 03
+Last activity: 2026-11-14 — Completed 01-02 classifier plan
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
+- Total plans completed: 2
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -46,7 +46,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1. Shelves | 0 | 3 | — |
+| 1. Shelves | 2 | 3 | 18min |
 | 2. Live choice | 0 | TBD | — |
 | 3. Step-down | 0 | TBD | — |
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01-shelves P01 | 12min | 2 tasks | 5 files |
+| Phase 01-shelves P02 | 25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -75,6 +76,7 @@ Recent decisions affecting current work:
 - Chat `c398a042-f199-48a6-afb9-9480889e3f22` gaps are now in the v1 requirements and phase criteria: weight renormalization, tier words `fable`/`astra`, `opus`/`sol`, `sonnet`/`terra`, `haiku`/`luna`, bench scope, unchecked model below a confirmed one, `safeguards` on the notice, `tool_result` images, and the real `/v1/models` window.
 - PR #1179 stays superseded by `.planning/research/FORK-SEAMS.md`. TUNE-01 and TUNE-02 are out of scope. They were not in the source chat.
 - [Phase 01-shelves]: Score helpers ship in RED so tracer asserts 50.3375 before applyShelf opens shelf
+- [Phase 01-shelves]: Batch and non-text run before score; tier distance > 1 is review not shelf
 
 ### Pending Todos
 
@@ -94,6 +96,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-14T17:07:53.700Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-11-14T17:35:00.000Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None

@@ -13,7 +13,7 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 
 - [x] **SHELF-01**: User can send a Claude Code class name (`claude-fable-…`, `claude-opus-…`, `claude-sonnet-…`, `claude-haiku-…`, and `best` as Opus) and CCR opens that shelf. `opus[1m]` and `sonnet[1m]` stay in that class and drop any model whose window is under 1,000,000 tokens. The model list Claude reads at `/v1/models` reports each model's real context window, so Claude does not treat every model as 200k (parent issue #1911).
 - [x] **SHELF-02**: User can add a provider model and CCR places it on a shelf from OpenRouter `benchmarks.artificial_analysis`. Weights are `coding_index` 0.50, `agentic_index` 0.30, `intelligence_index` 0.20. If an index is missing, the remaining weights are divided by their sum. Cuts are 62 / 50 / 28. One index cannot place a model above Sonnet. With no index, a tier word in the id sets the class: `fable` or `astra`, `opus` or `sol`, `sonnet` or `terra`, `haiku` or `luna`. `flash`, `mini`, `nano`, and `lite` are not tier words. A hex model id still gets a class from the score or from those words (parent PR #1593).
-- [ ] **SHELF-03**: User can see models that have no index and no tier word, `:batch` models, and non-text models stay off the shelves. A model whose score and tier word disagree by more than one step waits in a review queue instead of being shelved.
+- [x] **SHELF-03**: User can see models that have no index and no tier word, `:batch` models, and non-text models stay off the shelves. A model whose score and tier word disagree by more than one step waits in a review queue instead of being shelved.
 
 ### Choice
 
