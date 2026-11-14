@@ -28,6 +28,7 @@ import {
 import { isCodexResponsesCompactPath, type ContextArchiveResponseMode } from "@ccr/core/gateway/context-archive/protocol";
 import { adaptRouteRequestBody, restoreRouteRequestBody } from "@ccr/core/routing/protocol-adapter";
 import { reserveApiKeyLimits } from "@ccr/core/gateway/auth/api-key-authorizer";
+import { isClassAttempt } from "@ccr/core/class-switch/seam";
 import { recordProviderCredentialOutcome } from "@ccr/core/providers/credential-pool";
 import { codexApplyPatchBridgeResponseStream, prepareCodexApplyPatchBridgeRequest } from "@ccr/core/gateway/features/codex-patch-bridge";
 import { codexMultiAgentBridgeResponseStream, prepareCodexMultiAgentBridgeRequest } from "@ccr/core/gateway/features/codex-multi-agent-bridge";
@@ -914,7 +915,9 @@ export class GatewayRequestPipeline {
       if (codexApplyPatchBridgeActive || codexMultiAgentBridgeActive || appendContextArchiveFooter || transformCodexCompactResponse || rewriteAnthropicResponseModel) {
         responseHeaders.delete("content-length");
       }
-      recordProviderCredentialOutcome(this.config, method, upstreamResult.attempt, upstreamResponse.status, responseHeaders);
+      if (!isClassAttempt(upstreamResult.attempt)) {
+        recordProviderCredentialOutcome(this.config, method, upstreamResult.attempt, upstreamResponse.status, responseHeaders);
+      }
       if (clientDisconnected || response.destroyed) {
         await cancelResponseBody(upstreamResponse);
         finalizeOpenRouterDiscountSelection(false);
