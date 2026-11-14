@@ -29,7 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. User adds a provider model and CCR places it from OpenRouter `benchmarks.artificial_analysis` (weights `coding_index` 0.50, `agentic_index` 0.30, `intelligence_index` 0.20; cuts 62 / 50 / 28). A missing index divides the remaining weights by their sum. One index cannot place a model above Sonnet. With no index, the tier words are `fable`/`astra`, `opus`/`sol`, `sonnet`/`terra`, and `haiku`/`luna`. `flash`, `mini`, `nano`, and `lite` do not set a tier. A hex model id still gets a class from the score or from those words.
   3. User can see that a model with no index and no tier word, a `:batch` model, or a non-text model stays off the shelves. A model whose score and tier word disagree by more than one step waits in the review queue and is not shelved.
   4. User leaves CCR running and, every 10 minutes, each provider's model list refreshes with no text generation. A new name is classified. A missing name leaves the shelves.
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Open a class shelf from the end of createRouteExecutionPlan
+- [ ] 01-02-PLAN.md — Place a model by score, tier word, exclusion, and review distance
+- [ ] 01-03-PLAN.md — Refresh shelves every 10 minutes and report the real context window
 
 ### Phase 2: Live choice
 **Goal**: A class request is served by the strongest live triple, and a refusal before the first token tries the next one.
@@ -61,6 +66,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Shelves | 0/TBD | Not started | - |
+| 1. Shelves | 0/3 | Not started | - |
 | 2. Live choice | 0/TBD | Not started | - |
 | 3. Step-down | 0/TBD | Not started | - |
