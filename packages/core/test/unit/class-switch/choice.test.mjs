@@ -807,6 +807,9 @@ test("a class attempt sends one credential", async () => {
         upstreamUrl
       });
       assert.equal(networkFetches, 2);
+      // One class leg with the delay the loop actually used: no backoff entry.
+      assert.equal(networkResult.failedAttempts.length, 1);
+      assert.equal(networkResult.failedAttempts[0]?.delayMs, 0);
     } finally {
       globalThis.fetch = originalFetch;
     }

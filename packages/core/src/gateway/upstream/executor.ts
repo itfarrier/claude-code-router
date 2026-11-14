@@ -778,7 +778,11 @@ export async function fetchUpstreamWithFallback(input: {
       };
     } catch (error) {
       const message = formatError(error);
-      const delayMs = hasNextAttempt && !input.signal?.aborted
+      // A class continuation never waits out a backoff. Record one leg with
+      // delay 0 and skip the backoff computation entirely, so the trace and
+      // the fallback attempt list show the delay the loop actually used.
+      const classContinue = classLive && hasNextAttempt && !input.signal?.aborted;
+      const delayMs = !classContinue && hasNextAttempt && !input.signal?.aborted
         ? retryDelayAfterNetworkError(failedAttempts.length)
         : 0;
       input.trace?.capture({
@@ -815,13 +819,6 @@ export async function fetchUpstreamWithFallback(input: {
       }
       if (hasNextAttempt) {
         if (classLive) {
-          failedAttempts.push({
-            credentialChain: attempt.credentialChain,
-            credentialIds: attempt.credentialIds,
-            delayMs: 0,
-            error: message,
-            model: attempt.model
-          });
           continue;
         }
         if (delayMs > 0) {
