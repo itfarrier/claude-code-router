@@ -490,6 +490,96 @@ test("probe false row is not passed to the probe mock", async () => {
   });
 });
 
+test("the probe tick loads the saved bench before deciding", async () => {
+  await withBenchEnv(async () => {
+    const mod = await benchImport();
+    mod.setClassSwitchBenchNowForTest?.(() => FIXED_NOW);
+    await writeShelfSnapshot({
+      excluded: [],
+      review: [],
+      shelves: { ...emptyShelves(), opus: [{ provider: "BenchProvider", model: "alpha/model-a" }] },
+      updatedAt: new Date().toISOString()
+    });
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const file = benchSnapshotPath();
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(
+      file,
+      JSON.stringify({ "BenchProvider\0cred:x\0alpha/model-a": { until: FIXED_NOW + 600_000, probe: true } }),
+      "utf8"
+    );
+    const probeCalls = [];
+    startBench(
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ credentialId: "cred:x", api_key: "sk" }] }] },
+      {
+        now: () => FIXED_NOW,
+        schedule: oneShotSchedule(),
+        probeProvider: async (r) => {
+          probeCalls.push(r);
+          return { capabilities: [], models: [], protocols: [] };
+        }
+      }
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    stopBench();
+    // The loaded row is still parked, so no probe fires and no fresh due
+    // mark replaces it.
+    assert.equal(probeCalls.length, 0);
+    assert.equal(mod.benchDueAtForTest("BenchProvider", "alpha/model-a"), undefined);
+  });
+});
+
+test("the probe tick follows the newest sampled row", async () => {
+  await withBenchEnv(async () => {
+    const mod = await benchImport();
+    mod.setClassSwitchBenchNowForTest?.(() => FIXED_NOW);
+    await writeShelfSnapshot({
+      excluded: [],
+      review: [],
+      shelves: { ...emptyShelves(), opus: [{ provider: "BenchProvider", model: "alpha/model-a" }] },
+      updatedAt: new Date().toISOString()
+    });
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const file = benchSnapshotPath();
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(
+      file,
+      JSON.stringify({
+        "BenchProvider\0cred:old\0alpha/model-a": {
+          remainingRequests: 20,
+          resetDurationMs: 60_000,
+          sampledAt: FIXED_NOW - 1000
+        },
+        "BenchProvider\0cred:new\0alpha/model-a": {
+          remainingRequests: 2,
+          resetDurationMs: 60_000,
+          sampledAt: FIXED_NOW
+        }
+      }),
+      "utf8"
+    );
+    mod.markShelfDueForTest?.("BenchProvider", "alpha/model-a", FIXED_NOW);
+    const probeCalls = [];
+    startBench(
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ credentialId: "cred:new", api_key: "sk" }] }] },
+      {
+        now: () => FIXED_NOW,
+        schedule: oneShotSchedule(),
+        probeProvider: async (r) => {
+          probeCalls.push(r);
+          return { capabilities: [], models: [], protocols: [] };
+        }
+      }
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    stopBench();
+    // The older large-remainder sample must not suppress the probe the
+    // newest sample allows.
+    assert.equal(probeCalls.length, 1);
+    assert.equal(probeCalls[0].mode, "connectivity");
+  });
+});
+
 test("CCR_CLASS_SWITCH zero does not start the bench timer", async () => {
   await withBenchEnv(async () => {
     process.env.CCR_CLASS_SWITCH = "0";
