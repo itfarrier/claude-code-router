@@ -34,11 +34,26 @@ export type ClassifyInput = {
   model: string;
   artificialAnalysis?: ArtificialAnalysisIndexes;
   contextWindow?: number;
+  outputModalities?: string[];
+  architectureModality?: string;
 };
 
 export type ClassifyResult =
-  | { kind: "shelf"; class: ShelfClass; score: number }
-  | { kind: "excluded"; reason: "no-index" };
+  | { kind: "shelf"; class: ShelfClass; score?: number; tierClass?: ShelfClass }
+  | { kind: "excluded"; reason: "no-index" | "batch" | "non-text" }
+  | {
+      kind: "review";
+      reason: "score-tier-disagree";
+      scoreClass: ShelfClass;
+      tierClass: ShelfClass;
+      score?: number;
+    };
+
+export type OpenRouterModelRow = {
+  id?: string;
+  canonical_slug?: string;
+  benchmarks?: { artificial_analysis?: ArtificialAnalysisIndexes };
+};
 
 const INDEX_WEIGHTS = {
   coding_index: 0.5,
@@ -69,6 +84,65 @@ export function scoreArtificialAnalysis(indexes: ArtificialAnalysisIndexes | und
   return weighted / weightSum;
 }
 
+const SHELF_CLASS_ORDER: ShelfClass[] = ["fable", "opus", "sonnet", "haiku"];
+
+const IGNORED_TIER_TOKENS = new Set(["flash", "mini", "nano", "lite"]);
+
+function fold(value: string): string {
+  return value.toLowerCase();
+}
+
+function tierClassForToken(token: string): ShelfClass | undefined {
+  const folded = fold(token);
+  if (folded === "fable" || folded === "astra") {
+    return "fable";
+  }
+  if (folded === "opus" || folded === "sol") {
+    return "opus";
+  }
+  if (folded === "sonnet" || folded === "terra") {
+    return "sonnet";
+  }
+  if (folded === "haiku" || folded === "luna") {
+    return "haiku";
+  }
+  return undefined;
+}
+
+function modelIdTokens(modelId: string): string[] {
+  return modelId.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+}
+
+function tierClassesFromModelId(modelId: string): ShelfClass[] {
+  const seen = new Set<ShelfClass>();
+  const classes: ShelfClass[] = [];
+  for (const token of modelIdTokens(modelId)) {
+    if (IGNORED_TIER_TOKENS.has(fold(token))) {
+      continue;
+    }
+    const tierClass = tierClassForToken(token);
+    if (tierClass && !seen.has(tierClass)) {
+      seen.add(tierClass);
+      classes.push(tierClass);
+    }
+  }
+  return classes;
+}
+
+function classDistance(a: ShelfClass, b: ShelfClass): number {
+  return Math.abs(SHELF_CLASS_ORDER.indexOf(a) - SHELF_CLASS_ORDER.indexOf(b));
+}
+
+function higherShelfClass(a: ShelfClass, b: ShelfClass): ShelfClass {
+  return SHELF_CLASS_ORDER.indexOf(a) < SHELF_CLASS_ORDER.indexOf(b) ? a : b;
+}
+
+function presentIndexCount(indexes: ArtificialAnalysisIndexes | undefined): number {
+  return (["coding_index", "agentic_index", "intelligence_index"] as const).filter(
+    (key) => finiteIndex(indexes?.[key]) !== undefined
+  ).length;
+}
+
 export function classForScore(score: number, presentIndexCount = 3): ShelfClass | undefined {
   let shelfClass: ShelfClass;
   if (score >= 62) {
@@ -86,19 +160,78 @@ export function classForScore(score: number, presentIndexCount = 3): ShelfClass 
   return shelfClass;
 }
 
+function shelfFromTierOnly(tierClasses: ShelfClass[]): ClassifyResult {
+  if (!tierClasses.length) {
+    return { kind: "excluded", reason: "no-index" };
+  }
+  if (tierClasses.length === 1) {
+    const tierClass = tierClasses[0];
+    return { kind: "shelf", class: tierClass, tierClass };
+  }
+  const higher = tierClasses.reduce((left, right) => higherShelfClass(left, right));
+  const lower = tierClasses.find((tier) => tier !== higher) ?? higher;
+  const distance = classDistance(higher, lower);
+  if (distance > 1) {
+    return {
+      kind: "review",
+      reason: "score-tier-disagree",
+      scoreClass: higher,
+      tierClass: lower
+    };
+  }
+  return { kind: "shelf", class: higher, tierClass: higher };
+}
+
 export function classifyModel(input: ClassifyInput): ClassifyResult {
+  const tierClasses = tierClassesFromModelId(input.model);
   const score = scoreArtificialAnalysis(input.artificialAnalysis);
+  const presentCount = presentIndexCount(input.artificialAnalysis);
+
   if (score === undefined) {
-    return { kind: "excluded", reason: "no-index" };
+    return shelfFromTierOnly(tierClasses);
   }
-  const presentCount = ["coding_index", "agentic_index", "intelligence_index"].filter((key) =>
-    finiteIndex(input.artificialAnalysis?.[key as keyof ArtificialAnalysisIndexes]) !== undefined
-  ).length;
-  const shelfClass = classForScore(score, presentCount);
-  if (!shelfClass) {
-    return { kind: "excluded", reason: "no-index" };
+
+  const scoreClass = classForScore(score, presentCount);
+  if (!scoreClass) {
+    return shelfFromTierOnly(tierClasses);
   }
-  return { kind: "shelf", class: shelfClass, score };
+
+  if (!tierClasses.length) {
+    return { kind: "shelf", class: scoreClass, score };
+  }
+
+  const tierClass = tierClasses[0];
+  const distance = classDistance(scoreClass, tierClass);
+  if (distance <= 1) {
+    return { kind: "shelf", class: scoreClass, score, tierClass };
+  }
+
+  return { kind: "shelf", class: scoreClass, score, tierClass };
+}
+
+export function matchOpenRouterModel(
+  modelId: string,
+  rows: OpenRouterModelRow[]
+): OpenRouterModelRow | undefined {
+  const target = fold(modelId);
+  const idMatches = rows.filter(
+    (row) => fold(row.id ?? "") === target || fold(row.canonical_slug ?? "") === target
+  );
+  if (idMatches.length === 1) {
+    return idMatches[0];
+  }
+  if (idMatches.length > 1) {
+    return undefined;
+  }
+  if (modelId.includes("/")) {
+    return undefined;
+  }
+  const segmentMatches = rows.filter((row) => {
+    const id = row.id ?? row.canonical_slug ?? "";
+    const segment = id.split("/").pop() ?? "";
+    return fold(segment) === target;
+  });
+  return segmentMatches.length === 1 ? segmentMatches[0] : undefined;
 }
 
 export function shelfSnapshotPath(): string {
