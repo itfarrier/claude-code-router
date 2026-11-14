@@ -460,6 +460,28 @@ test("two live credentials produce two rows with the same model selector", async
   });
 });
 
+test("one parked credential keeps the model live for the other credential", async () => {
+  await withShelfDataDir(async () => {
+    resetGatewayBench();
+    await writeShelfSnapshot({
+      excluded: [],
+      review: [],
+      shelves: {
+        ...emptyShelves(),
+        opus: [{ model: "alpha/model-a", provider: "BenchProvider", score: 80 }]
+      },
+      updatedAt: new Date().toISOString()
+    });
+    await recordClassRefusal(429, "BenchProvider", "alpha/model-a", "key-1", new Headers({ "retry-after": "60" }));
+    assert.equal(isBenched("BenchProvider", "alpha/model-a"), false);
+    assert.equal(isBenched("BenchProvider", "alpha/model-a", "key-1"), true);
+    assert.equal(isBenched("BenchProvider", "alpha/model-a", "cred:second"), false);
+    const attempts = attemptsForClass(parseClassRequest("claude-opus-4-6"), twinCredentialRegistry(), opusScalars());
+    assert.equal(attempts?.length, 1);
+    resetGatewayBench();
+  });
+});
+
 test("toolTurn true returns the remembered row", async () => {
   await withShelfDataDir(async () => {
     remember("sess-tool", { credentialId: "cred:second", model: "alpha/model-a", provider: "BenchProvider" });

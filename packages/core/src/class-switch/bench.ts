@@ -526,7 +526,12 @@ export function isBenched(provider: string, model: string, credentialId?: string
     if (rowModel !== "*" && rowModel !== modelId) {
       continue;
     }
-    if (rowCredential === "*" || credentialId === undefined || rowCredential === credentialId) {
+    // An omitted credential id (model-level checks) matches only the wildcard
+    // credential scope (404 and 5xx rows). A park stored for one credential —
+    // a per-credential 429, or a 401 stored as that credential on model "*" —
+    // must not remove the model for every other live credential; the callers
+    // that check per slug keep doing that.
+    if (rowCredential === "*" || (credentialId !== undefined && rowCredential === credentialId)) {
       return true;
     }
   }
