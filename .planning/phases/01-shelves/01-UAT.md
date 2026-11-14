@@ -3,21 +3,22 @@ status: testing
 phase: 01-shelves
 source: [01-VERIFICATION.md]
 started: 2026-11-14T18:52:17Z
-updated: 2026-11-14T18:52:17Z
+updated: 2026-11-15T00:00:00Z
 ---
 
 ## Current Test
 
 number: 1
-name: Confirm a shelf open and a snapshot write do not read, copy, or log the chat message body, tool results, or images.
+name: Confirm the snapshot write and classification path (seedShelvesFromConfig, refreshClassShelves, writeShelfSnapshot) does not read, copy, or log the chat message body, tool results, or images.
 expected: |
-  The shelf input stays the model name, the registry, and the snapshot.
+  The catalog walk input is the config, the registry, the probe, and the previous snapshot. The snapshot JSON holds model ids, scores, tier classes, windows, and reasons only.
 awaiting: user response
 
 ## Tests
 
-### 1. Confirm a shelf open and a snapshot write do not read, copy, or log the chat message body, tool results, or images.
-expected: The shelf input stays the model name, the registry, and the snapshot.
+### 1. Confirm the snapshot write and classification path (seedShelvesFromConfig, refreshClassShelves, writeShelfSnapshot) does not read, copy, or log the chat message body, tool results, or images.
+expected: The catalog walk input is the config, the registry, the probe, and the previous snapshot. The snapshot JSON holds model ids, scores, tier classes, windows, and reasons only.
+note: Narrowed on 2026-11-15 re-verification — the shelf-open half is superseded by sanctioned phase-2 design (CHOICE-01 / ROADMAP Phase 2 SC 5: policy receives the tool list and image presence, not the body). The snapshot-write half carries forward.
 result: [pending]
 
 ### 2. Confirm this phase does not change the model name in a response body and does not add x-ccr-requested-model or x-ccr-served-model.
