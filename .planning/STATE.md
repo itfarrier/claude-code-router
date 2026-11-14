@@ -4,16 +4,16 @@ milestone: v1.0
 current_phase: 02
 current_phase_name: Live choice
 status: executing
-stopped_at: verification_deferred_human
-last_updated: "2026-11-14T20:26:22.425Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-11-14T20:30:18.060Z"
 last_activity: 2026-11-14
 last_activity_desc: Phase 02 execution started
-state_head: fac8c6eae8c8fe1acda5b10b27d755f48c104cf4
+state_head: d5070e33fe8746679413c0fd00511f5276589bd0
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 4
 milestone_name: Automatic class switch
 ---
 
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 ## Current Position
 
 Phase: 02 (Live choice) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 02
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-11-14 — Phase 02 execution started
 
 Progress: [██████░░░░] 67%
@@ -62,6 +62,7 @@ Progress: [██████░░░░] 67%
 | Phase 01-shelves P01 | 12min | 2 tasks | 5 files |
 | Phase 01-shelves P02 | 25min | 2 tasks | 2 files |
 | Phase 01-shelves P03 | 45min | 2 tasks | 6 files |
+| Phase 02-live-choice P01 | 25min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,7 @@ Recent decisions affecting current work:
 - [Phase 01-shelves]: Score helpers ship in RED so tracer asserts 50.3375 before applyShelf opens shelf
 - [Phase 01-shelves]: Batch and non-text run before score; tier distance > 1 is review not shelf
 - [Phase 01-shelves]: Catalog walk stays separate from provider auto-refresh timers
+- [Phase 02-live-choice]: 02-01 parks only 5xx at provider+model for 30s; other status clocks are later plans
 
 ### Pending Todos
 
@@ -106,7 +108,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-14T19:20:00.000Z
-Stopped at: verification_deferred_human for phase 1
+Last session: 2026-11-14T20:30:17.991Z
+Stopped at: Completed 02-01-PLAN.md
 Resume file: .planning/phases/01-shelves/01-UAT.md
 Phase 2 plans: .planning/phases/02-live-choice/02-01-PLAN.md through 02-04-PLAN.md. Phase 1 verification remains deferred.
