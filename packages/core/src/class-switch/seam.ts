@@ -178,6 +178,8 @@ export function stop(): void {
   stopClassSwitchCatalog();
 }
 
+export { recordClassRefusal } from "@ccr/core/class-switch/bench";
+
 export function applyShelf(plan: RouteExecutionPlan, input: RouteExecutionPlanInput): RouteExecutionPlan {
   if (process.env.CCR_CLASS_SWITCH === "0") {
     return plan;
