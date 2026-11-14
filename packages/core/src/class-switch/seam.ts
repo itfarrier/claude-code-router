@@ -1,3 +1,4 @@
+import { attemptsForClass, parseClassRequest } from "@ccr/core/class-switch/plan";
 import type { RouterFallbackConfig } from "@ccr/core/contracts/app";
 import type { RouteExecutionPlan } from "@ccr/core/routing/contracts";
 import type { ModelRegistry } from "@ccr/core/routing/model-registry";
@@ -10,6 +11,14 @@ export type RouteExecutionPlanInput = {
   primaryModel?: string;
 };
 
-export function applyShelf(plan: RouteExecutionPlan, _input: RouteExecutionPlanInput): RouteExecutionPlan {
-  return plan;
+export function applyShelf(plan: RouteExecutionPlan, input: RouteExecutionPlanInput): RouteExecutionPlan {
+  const parsed = parseClassRequest(input.bodyModel ?? input.primaryModel);
+  if (!parsed) {
+    return plan;
+  }
+  const attempts = attemptsForClass(parsed, input.modelRegistry);
+  if (!attempts) {
+    return plan;
+  }
+  return { ...plan, attempts };
 }

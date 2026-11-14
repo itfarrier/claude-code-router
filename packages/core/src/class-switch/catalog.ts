@@ -1,4 +1,7 @@
-import { resolve as pathResolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { dirname, resolve as pathResolve } from "node:path";
 import { resolveRuntimeDataDir } from "@ccr/core/runtime/app-paths";
 
 export type ShelfClass = "fable" | "opus" | "sonnet" | "haiku";
@@ -102,10 +105,56 @@ export function shelfSnapshotPath(): string {
   return pathResolve(resolveRuntimeDataDir(), "cache", "class-switch-shelves.json");
 }
 
-export function readShelfSnapshot(): ShelfSnapshot | undefined {
-  return undefined;
+function isShelfSnapshot(value: unknown): value is ShelfSnapshot {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const snapshot = value as ShelfSnapshot;
+  if (typeof snapshot.updatedAt !== "string") {
+    return false;
+  }
+  if (!Array.isArray(snapshot.excluded) || !Array.isArray(snapshot.review)) {
+    return false;
+  }
+  const shelves = snapshot.shelves;
+  if (!shelves || typeof shelves !== "object") {
+    return false;
+  }
+  for (const shelfClass of ["fable", "opus", "sonnet", "haiku"] as const) {
+    const rows = shelves[shelfClass];
+    if (!Array.isArray(rows)) {
+      return false;
+    }
+    for (const row of rows) {
+      if (!row || typeof row !== "object") {
+        return false;
+      }
+      if (typeof row.provider !== "string" || typeof row.model !== "string") {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
-export async function writeShelfSnapshot(_snapshot: ShelfSnapshot): Promise<void> {
-  return;
+export function readShelfSnapshot(): ShelfSnapshot | undefined {
+  try {
+    const raw = readFileSync(shelfSnapshotPath(), "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    return isShelfSnapshot(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function writeShelfSnapshot(snapshot: ShelfSnapshot): Promise<void> {
+  const file = shelfSnapshotPath();
+  const temporaryFile = `${file}.${randomUUID()}.tmp`;
+  try {
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(temporaryFile, JSON.stringify(snapshot), "utf8");
+    await rename(temporaryFile, file);
+  } finally {
+    await rm(temporaryFile, { force: true });
+  }
 }
