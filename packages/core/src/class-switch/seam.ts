@@ -204,6 +204,16 @@ export {
   setThinShareCounter
 };
 
+const classAttempts = new WeakSet<object>();
+
+export function markClassAttempt(attempt: object): void {
+  classAttempts.add(attempt);
+}
+
+export function isClassAttempt(attempt: object | undefined): boolean {
+  return attempt !== undefined && classAttempts.has(attempt);
+}
+
 export function classShelfActive(modelName: string | undefined): boolean {
   if (process.env.CCR_CLASS_SWITCH === "0") {
     return false;

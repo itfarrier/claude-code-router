@@ -10,10 +10,22 @@ import { modelRegistryForConfig, normalizeRouteSelector, parseProviderModelSelec
 import { requestProtocolForPath } from "@ccr/core/routing/protocol-endpoints";
 import { resolveConfiguredProviderModelSelector, resolveUniqueConfiguredProviderModelSelector } from "@ccr/core/routing/model-resolution";
 import { estimateLimitUsage } from "@ccr/core/gateway/limits/window-limiter";
+import { isBenched, recordClassSuccess } from "@ccr/core/class-switch/bench";
+import {
+  classShelfActive,
+  isClassAttempt,
+  liftToolResultImages,
+  markClassAttempt,
+  recordClassRefusal,
+  remember,
+  rememberedCredential,
+  requestFacts
+} from "@ccr/core/class-switch/seam";
+import { shouldBufferAggregateErrorBody } from "@ccr/core/gateway/http/error-detail";
 import { providerCredentialLimitState, readProviderCredentialCooldown, recordProviderCredentialOutcome } from "@ccr/core/providers/credential-pool";
 import { isRecord, stringValue } from "@ccr/core/gateway/internal/value";
 import { isLocalClaudeCodeOauthProviderPlugin, mergeAnthropicBetaValues } from "@ccr/core/providers/oauth-plugin";
-import { abortSignalMessage, formatError, omitLocalObservabilityHeaders, shouldSendBody, withCoreGatewayAuthHeader } from "@ccr/core/gateway/http/io";
+import { abortSignalMessage, formatError, omitLocalObservabilityHeaders, readHeader, shouldSendBody, withCoreGatewayAuthHeader } from "@ccr/core/gateway/http/io";
 import { parseJsonObjectSafe, releaseJsonObject, serializeJsonBody, serializeJsonBodyWithModel } from "@ccr/core/gateway/http/body";
 import { resolveGatewayPublicModelId } from "@ccr/core/gateway/features/model-discovery";
 import { ccrRoutedModelHeader } from "@ccr/core/gateway/core-runtime/router-plugin-contract";
@@ -312,15 +324,26 @@ export async function fetchUpstreamWithFallback(input: {
     path: input.path,
     routedModel: input.routedModel
   });
-  const attempts = buildUpstreamAttempts(
+  const attemptBuild = buildUpstreamAttempts(
     input.config,
     planningRouting.fallback,
     input.method,
     input.path,
     planningRouting.body,
-    planningRouting.routedModel
+    planningRouting.routedModel,
+    input.headers
   );
+  if (attemptBuild.planningBody) {
+    planningRouting.body = attemptBuild.planningBody;
+  }
+  const { attempts, classLive, sessionId, toolTurn } = attemptBuild;
+  const sentCredentialSlugs = new Set<string>();
   const failedAttempts: UpstreamFailedAttempt[] = [];
+  let lastClassFailureResponse: {
+    attempt: UpstreamAttempt;
+    attemptStartedAtMonoMs: number;
+    response: Response;
+  } | undefined;
   const attemptRoutingCache = new Map<string | undefined, {
     body?: Buffer;
     headers: Record<string, string>;
@@ -414,17 +437,25 @@ export async function fetchUpstreamWithFallback(input: {
       target: cachedAttemptRouting.routedModel ? { model: cachedAttemptRouting.routedModel } : undefined
     });
     const attemptPreparationStartedAt = Date.now();
-    const attempt = prepareUpstreamCredentialAttempt({
+    const preparedAttempt = prepareUpstreamCredentialAttempt({
       attempt: {
         ...plannedAttempt,
         body: cachedAttemptRouting.body,
         model: cachedAttemptRouting.routedModel ?? plannedAttempt.model
       },
+      classLive,
       config: input.config,
       headers: attemptHeaders,
       method: input.method,
-      path: input.path
+      path: input.path,
+      sentCredentialSlugs: classLive ? sentCredentialSlugs : undefined,
+      sessionId,
+      toolTurn
     });
+    if (classLive && !preparedAttempt) {
+      continue;
+    }
+    const attempt = preparedAttempt!;
     if (index > 0) {
       const headers = { ...attempt.headers };
       const attemptRoutedModel = routedModelHeaderForAttempt(attempt);
@@ -488,6 +519,10 @@ export async function fetchUpstreamWithFallback(input: {
     releaseJsonObject(attemptSourceBody);
     releaseJsonObject(input.body);
 
+    if (classLive && attempt.credentialIds?.[0]) {
+      sentCredentialSlugs.add(attempt.credentialIds[0]);
+    }
+
     try {
       const response = await fetchWithSystemProxy(attemptUrl, {
         body: shouldSendBody(input.method) ? attempt.body?.toString("utf8") : undefined,
@@ -495,6 +530,156 @@ export async function fetchUpstreamWithFallback(input: {
         method: input.method,
         signal: input.signal
       });
+
+      if (classLive) {
+        const modelParts = classAttemptModelParts(attempt);
+        if (response.ok) {
+          if (sessionId && modelParts && attempt.credentialIds?.[0]) {
+            const durationMs = Date.now() - attemptStartedAt;
+            const headerRecord = Object.fromEntries(response.headers.entries());
+            await recordClassSuccess(
+              modelParts.provider,
+              modelParts.model,
+              attempt.credentialIds[0],
+              { durationMs, headers: headerRecord }
+            );
+            remember(sessionId, {
+              credentialId: attempt.credentialIds[0],
+              model: modelParts.model,
+              provider: modelParts.provider
+            });
+          }
+          input.trace?.capture({
+            attempt: attemptNumber,
+            durationMs: Date.now() - attemptStartedAt,
+            kind: "outcome",
+            name: "upstream.attempt.outcome",
+            outcome: { statusCode: response.status },
+            phase: "outcome",
+            startedAtMs: attemptStartedAt,
+            status: "ok",
+            target: {
+              ...(attempt.model ? { model: attempt.model } : {}),
+              ...(attemptProvider ? { provider: attemptProvider } : {})
+            }
+          });
+          return {
+            attempt,
+            failedAttempts,
+            response,
+            timing: {
+              attemptStartedAtMonoMs
+            }
+          };
+        }
+
+        if (response.status === 400) {
+          void cancelResponseBody(response);
+          input.trace?.capture({
+            attempt: attemptNumber,
+            durationMs: Date.now() - attemptStartedAt,
+            kind: "outcome",
+            name: "upstream.attempt.outcome",
+            outcome: { statusCode: response.status },
+            phase: "outcome",
+            startedAtMs: attemptStartedAt,
+            status: "error",
+            target: {
+              ...(attempt.model ? { model: attempt.model } : {}),
+              ...(attemptProvider ? { provider: attemptProvider } : {})
+            }
+          });
+          return {
+            attempt,
+            failedAttempts,
+            response,
+            timing: {
+              attemptStartedAtMonoMs
+            }
+          };
+        }
+
+        const continueClass = classShouldContinueAfterStatus(response.status);
+        if (classWritesBenchRow(response.status) && modelParts) {
+          let refusalBody: unknown;
+          if (shouldBufferAggregateErrorBody(response.headers)) {
+            try {
+              refusalBody = JSON.parse(await response.text());
+            } catch {
+              refusalBody = undefined;
+            }
+          }
+          void cancelResponseBody(response);
+          await recordClassRefusal(
+            response.status,
+            modelParts.provider,
+            modelParts.model,
+            attempt.credentialIds?.[0] ?? "*",
+            Object.fromEntries(response.headers.entries()),
+            refusalBody
+          );
+        } else {
+          void cancelResponseBody(response);
+        }
+
+        lastClassFailureResponse = {
+          attempt,
+          attemptStartedAtMonoMs,
+          response
+        };
+
+        if (continueClass && hasNextAttempt) {
+          failedAttempts.push({
+            credentialChain: attempt.credentialChain,
+            credentialIds: attempt.credentialIds,
+            delayMs: 0,
+            model: attempt.model,
+            statusCode: response.status
+          });
+          input.trace?.capture({
+            attempt: attemptNumber,
+            durationMs: Date.now() - attemptStartedAt,
+            kind: "outcome",
+            name: "upstream.attempt.outcome",
+            outcome: {
+              fallbackReason: `http:${response.status}`,
+              retryDelayMs: 0,
+              statusCode: response.status
+            },
+            phase: "outcome",
+            startedAtMs: attemptStartedAt,
+            status: "error",
+            target: {
+              ...(attempt.model ? { model: attempt.model } : {}),
+              ...(attemptProvider ? { provider: attemptProvider } : {})
+            }
+          });
+          continue;
+        }
+
+        input.trace?.capture({
+          attempt: attemptNumber,
+          durationMs: Date.now() - attemptStartedAt,
+          kind: "outcome",
+          name: "upstream.attempt.outcome",
+          outcome: { statusCode: response.status },
+          phase: "outcome",
+          startedAtMs: attemptStartedAt,
+          status: "error",
+          target: {
+            ...(attempt.model ? { model: attempt.model } : {}),
+            ...(attemptProvider ? { provider: attemptProvider } : {})
+          }
+        });
+        return {
+          attempt,
+          failedAttempts,
+          response,
+          timing: {
+            attemptStartedAtMonoMs
+          }
+        };
+      }
 
       if (hasNextAttempt && shouldFallbackAfterStatus(response.status, fallbackMode)) {
         const delayMs = retryDelayAfterStatus(response.headers, failedAttempts.length);
@@ -523,7 +708,9 @@ export async function fetchUpstreamWithFallback(input: {
           model: attempt.model,
           statusCode: response.status
         });
-        recordProviderCredentialOutcome(input.config, input.method, attempt, response.status, response.headers);
+        if (!isClassAttempt(attempt)) {
+          recordProviderCredentialOutcome(input.config, input.method, attempt, response.status, response.headers);
+        }
         // Failed response bodies may never finish. Start cancellation without
         // waiting for upstream cleanup before trying the next provider.
         void cancelResponseBody(response);
@@ -593,6 +780,16 @@ export async function fetchUpstreamWithFallback(input: {
         });
       }
       if (hasNextAttempt) {
+        if (classLive) {
+          failedAttempts.push({
+            credentialChain: attempt.credentialChain,
+            credentialIds: attempt.credentialIds,
+            delayMs: 0,
+            error: message,
+            model: attempt.model
+          });
+          continue;
+        }
         if (delayMs > 0) {
           await delay(delayMs, input.signal);
         }
@@ -606,6 +803,17 @@ export async function fetchUpstreamWithFallback(input: {
     }
   }
 
+  if (classLive && lastClassFailureResponse) {
+    return {
+      attempt: lastClassFailureResponse.attempt,
+      failedAttempts,
+      response: lastClassFailureResponse.response,
+      timing: {
+        attemptStartedAtMonoMs: lastClassFailureResponse.attemptStartedAtMonoMs
+      }
+    };
+  }
+
   throw new UpstreamRequestError("Gateway request failed before reaching an upstream provider.", {
     failedAttempts
   });
@@ -614,11 +822,15 @@ export async function fetchUpstreamWithFallback(input: {
 
 function prepareUpstreamCredentialAttempt(input: {
   attempt: UpstreamAttempt;
+  classLive?: boolean;
   config: AppConfig;
   headers: Record<string, string>;
   method: string;
   path: string;
-}): UpstreamAttempt {
+  sentCredentialSlugs?: Set<string>;
+  sessionId?: string;
+  toolTurn?: boolean;
+}): UpstreamAttempt | undefined {
   const normalizedBody = normalizeConfiguredProviderModelBody(input.attempt.body, input.config);
   const target = resolvePlannedProviderCredentialRoutingTarget(input.attempt, input.path) ??
     resolveProviderCredentialRoutingTarget(input.config, input.headers, input.path, input.attempt.body);
@@ -639,8 +851,11 @@ function prepareUpstreamCredentialAttempt(input: {
 
   const attemptHeaders = withClaudeCodeOauthBetaHeader(input.headers, input.config, target);
 
-  const credentials = activeProviderCredentials(target.provider);
-  if (credentials.length === 0) {
+  const allCredentials = activeProviderCredentials(target.provider);
+  if (allCredentials.length === 0) {
+    if (input.classLive) {
+      return undefined;
+    }
     const preserveModelSelector = shouldPreserveCapabilityModelSelector(input.attempt.body, target);
     const targetHeaders = targetProviderFallbackHeaders(attemptHeaders, target.provider, target.protocol);
     const targetBody = target.body ?? normalizedBody?.body ?? input.attempt.body;
@@ -658,9 +873,43 @@ function prepareUpstreamCredentialAttempt(input: {
     };
   }
 
+  let credentials = allCredentials;
+  if (input.classLive) {
+    const providerName = target.provider.name?.trim() ?? "";
+    const modelId = target.model.trim();
+    credentials = allCredentials.filter((credential, index) => {
+      const providerIndex = target.provider.credentials?.indexOf(credential) ?? index;
+      const slug = providerCredentialSlug(providerCredentialRuntimeId(target.provider, credential, providerIndex));
+      if (isBenched(providerName, modelId, slug)) {
+        return false;
+      }
+      if (input.sentCredentialSlugs?.has(slug)) {
+        return false;
+      }
+      return true;
+    });
+    if (input.toolTurn && input.sessionId) {
+      const triple = rememberedCredential(input.sessionId);
+      if (triple) {
+        credentials = credentials.filter((credential, index) => {
+          const providerIndex = target.provider.credentials?.indexOf(credential) ?? index;
+          const runtimeId = providerCredentialRuntimeId(target.provider, credential, providerIndex);
+          const slug = providerCredentialSlug(runtimeId);
+          return slug === triple.credentialId || runtimeId === triple.credentialId;
+        });
+      }
+    }
+    if (credentials.length === 0) {
+      return undefined;
+    }
+  }
+
   const usage = estimateLimitUsage(input.method, input.attempt.body ?? Buffer.alloc(0));
   const selection = selectProviderCredentials(target.provider, target.protocol, credentials, usage);
   if (selection.credentials.length === 0) {
+    if (input.classLive) {
+      return undefined;
+    }
     const preserveModelSelector = shouldPreserveCapabilityModelSelector(input.attempt.body, target);
     return {
       ...input.attempt,
@@ -673,14 +922,32 @@ function prepareUpstreamCredentialAttempt(input: {
 
   const headers: Record<string, string> = {
     ...attemptHeaders,
-    "x-target-providers": selection.credentials.map((candidate) => candidate.internalName).join(","),
-    "x-ccr-logical-provider": providerRuntimeId(target.provider),
-    "x-ccr-provider-credential-chain": selection.credentials.map((candidate) => candidate.credentialId).join(",")
+    "x-ccr-logical-provider": providerRuntimeId(target.provider)
   };
   delete headers["x-target-provider"];
   if (selection.saturated) {
     headers["x-ccr-provider-credential-saturated"] = "true";
   }
+
+  if (input.classLive) {
+    const chosen = selection.credentials[0];
+    headers["x-target-providers"] = chosen.internalName;
+    headers["x-ccr-provider-credential-chain"] = chosen.credentialId;
+    const classAttempt: UpstreamAttempt = {
+      ...input.attempt,
+      body: attemptBody(target.body ?? normalizedBody?.body ?? input.attempt.body),
+      credentialChain: [chosen.internalName],
+      credentialIds: [chosen.credentialId],
+      credentialProtocol: target.protocol,
+      headers,
+      logicalProvider: target.provider.name
+    };
+    markClassAttempt(classAttempt);
+    return classAttempt;
+  }
+
+  headers["x-target-providers"] = selection.credentials.map((candidate) => candidate.internalName).join(",");
+  headers["x-ccr-provider-credential-chain"] = selection.credentials.map((candidate) => candidate.credentialId).join(",");
 
   return {
     ...input.attempt,
@@ -1080,28 +1347,153 @@ function sortProviderCredentialCandidates<T extends {
 }
 
 
+const classSessionHeaderNames = [
+  "x-claude-code-session-id",
+  "x-claude-session-id",
+  "x-codex-session-id",
+  "x-openai-session-id",
+  "x-agent-session-id",
+  "x-session-id"
+] as const;
+
+function resolveClassSessionId(
+  headers: Record<string, string>,
+  metadataSessionId: string | undefined
+): string | undefined {
+  for (const name of classSessionHeaderNames) {
+    const direct = readHeader(headers[name]);
+    if (direct?.trim()) {
+      return direct.trim();
+    }
+    const matched = Object.entries(headers).find(([key]) => key.trim().toLowerCase() === name);
+    if (matched) {
+      const value = readHeader(matched[1]);
+      if (value?.trim()) {
+        return value.trim();
+      }
+    }
+  }
+  return metadataSessionId?.trim() || undefined;
+}
+
+function classShouldContinueAfterStatus(status: number): boolean {
+  if (status === 400) {
+    return false;
+  }
+  return status === 401 ||
+    status === 402 ||
+    status === 403 ||
+    status === 404 ||
+    status === 408 ||
+    status === 409 ||
+    status === 429 ||
+    status >= 500;
+}
+
+function classWritesBenchRow(status: number): boolean {
+  return status === 401 || status === 403 || status === 404 || status === 429 || status >= 500;
+}
+
+function classAttemptModelParts(attempt: UpstreamAttempt): { model: string; provider: string } | undefined {
+  if (attempt.target?.kind !== "provider") {
+    return undefined;
+  }
+  const provider = attempt.target.provider.name?.trim() ?? attempt.logicalProvider?.trim() ?? "";
+  const model = attempt.target.model.trim();
+  return provider && model ? { model, provider } : undefined;
+}
+
+type UpstreamAttemptBuild = {
+  attempts: UpstreamAttempt[];
+  classLive: boolean;
+  planningBody?: Buffer;
+  sessionId?: string;
+  toolTurn: boolean;
+};
+
 function buildUpstreamAttempts(
   config: AppConfig,
   fallback: RouterFallbackConfig,
   method: string,
   path: string,
   body: Buffer | undefined,
-  routedModel: string | undefined
-): UpstreamAttempt[] {
+  routedModel: string | undefined,
+  headers: Record<string, string>
+): UpstreamAttemptBuild {
   const parsedBody = parseJsonObjectSafe(body);
   const modelInPath = requestProtocolForPath(path) === "gemini_generate_content";
+  const bodyModel = modelInPath ? undefined : stringValue(parsedBody?.model);
+  const defaultFacts = {
+    estimatedTokens: 0,
+    hasImage: false,
+    sessionId: undefined,
+    toolNames: [] as string[],
+    toolTurn: false
+  };
+  let facts = defaultFacts;
+  if (body?.byteLength) {
+    const parsedForFacts = parseJsonObjectSafe(body);
+    if (parsedForFacts) {
+      try {
+        facts = requestFacts(method, serializeJsonBody(parsedForFacts));
+      } catch {
+        const usage = estimateLimitUsage(method, body);
+        facts = {
+          ...defaultFacts,
+          estimatedTokens: usage.totalTokens,
+          hasImage: usage.imageCount > 0,
+          sessionId:
+            isRecord(parsedForFacts.metadata) && typeof parsedForFacts.metadata.session_id === "string"
+              ? parsedForFacts.metadata.session_id.trim()
+              : undefined
+        };
+      }
+    } else {
+      const usage = estimateLimitUsage(method, body);
+      facts = {
+        ...defaultFacts,
+        estimatedTokens: usage.totalTokens,
+        hasImage: usage.imageCount > 0
+      };
+    }
+  }
+  const sessionId = resolveClassSessionId(headers, facts.sessionId);
+  const requestedModel = normalizeRouteSelector(bodyModel) ?? normalizeRouteSelector(routedModel);
+  const shelfActive = classShelfActive(bodyModel ?? routedModel);
   const plan = createRouteExecutionPlan({
-    bodyModel: modelInPath ? undefined : stringValue(parsedBody?.model),
+    bodyModel,
+    estimatedTokens: facts.estimatedTokens,
     fallback,
+    hasImage: facts.hasImage,
     hasRequestBody: shouldSendBody(method) && (fallback.mode !== "model-chain" || Boolean(parsedBody)),
     modelRegistry: modelRegistryForConfig(config),
-    primaryModel: routedModel
+    primaryModel: routedModel,
+    sessionId,
+    toolNames: facts.toolNames,
+    toolTurn: facts.toolTurn
   });
-  return plan.attempts.map((attempt) => ({
-    index: attempt.index,
-    model: attempt.model,
-    target: attempt.target
-  }));
+  const firstAttemptModel = plan.attempts[0]?.model;
+  const classLive = Boolean(
+    shelfActive &&
+    requestedModel &&
+    firstAttemptModel &&
+    firstAttemptModel !== requestedModel
+  );
+  let planningBody: Buffer | undefined;
+  if (classLive && parsedBody) {
+    planningBody = serializeJsonBody(liftToolResultImages(parsedBody));
+  }
+  return {
+    attempts: plan.attempts.map((attempt) => ({
+      index: attempt.index,
+      model: attempt.model,
+      target: attempt.target
+    })),
+    classLive,
+    planningBody,
+    sessionId,
+    toolTurn: facts.toolTurn
+  };
 }
 
 
