@@ -1,6 +1,8 @@
 import {
   contextWindowForProviderModel,
-  readShelfSnapshot
+  readShelfSnapshot,
+  startClassSwitchCatalog,
+  stopClassSwitchCatalog
 } from "@ccr/core/class-switch/catalog";
 import { attemptsForClass, parseClassRequest } from "@ccr/core/class-switch/plan";
 import {
@@ -160,9 +162,16 @@ export function applyContextWindows(
   return response;
 }
 
-export function start(_config: AppConfig): void {}
+export function start(config: AppConfig): void {
+  if (process.env.CCR_CLASS_SWITCH === "0") {
+    return;
+  }
+  startClassSwitchCatalog(config);
+}
 
-export function stop(): void {}
+export function stop(): void {
+  stopClassSwitchCatalog();
+}
 
 export function applyShelf(plan: RouteExecutionPlan, input: RouteExecutionPlanInput): RouteExecutionPlan {
   if (process.env.CCR_CLASS_SWITCH === "0") {
