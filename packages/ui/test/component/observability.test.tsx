@@ -679,6 +679,32 @@ test("safeguards follow the configured provider identity, not the display name",
   assert.match(unresolvedHtml, /Auto mode will not receive Anthropic safeguards from this non-Anthropic provider\./);
 });
 
+test("ordinary model-chain fallbacks without paired headers render no SD surfaces", () => {
+  // The parent's model-chain can route an Opus class name to a Sonnet model
+  // without the class-switch planner. Core emits the paired disclosure
+  // headers only for an actual recorded swap, so their absence suppresses
+  // both the pill and the detail block even though both class names derive.
+  const modelChainEntry: RequestLogEntry = {
+    ...stepDownRequestLogEntry,
+    responseHeaders: {
+      "content-type": "application/json"
+    }
+  };
+  const listHtml = logsViewMarkup([modelChainEntry]);
+  assert.ok(!listHtml.includes(">SD<"));
+  const html = expandedDetailsMarkup(modelChainEntry);
+  assert.ok(!html.includes("Step-down notice"));
+
+  // Contradictory evidence — headers present but the served model not a
+  // lower class — renders nothing too.
+  const contradictoryEntry: RequestLogEntry = {
+    ...modelChainEntry,
+    resolvedModel: "claude-opus-4-6",
+    responseModel: "claude-opus-4-6"
+  };
+  assert.ok(!expandedDetailsMarkup(contradictoryEntry).includes("Step-down notice"));
+});
+
 test("SD pill face stays fixed while long model ids live in the title tooltip", () => {
   const longIdEntry: RequestLogEntry = {
     ...stepDownRequestLogEntry,
