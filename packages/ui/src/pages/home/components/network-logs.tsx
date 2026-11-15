@@ -1587,7 +1587,23 @@ function capitalizeStepDownClass(value: SwapNoticeClass): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+// Header authenticity evidence: core emits the paired disclosure headers
+// only for an actual recorded swap, so ordinary model-chain fallbacks (which
+// can route a class name to a lower-class model without this planner) must
+// not render step-down surfaces. The class names themselves still come from
+// requestedModel/resolvedModel, never from the header values.
+function firstStepDownHeaderValue(value: string | string[] | undefined): string | undefined {
+  const first = Array.isArray(value) ? value[0] : value;
+  const trimmed = first?.trim();
+  return trimmed || undefined;
+}
+
 function stepDownDetailsForLog(entry: RequestLogEntry, providers?: GatewayProviderConfig[]): StepDownLogDetails | null {
+  const requestedEvidence = firstStepDownHeaderValue(entry.responseHeaders["x-ccr-requested-model"]);
+  const servedEvidence = firstStepDownHeaderValue(entry.responseHeaders["x-ccr-served-model"]);
+  if (!requestedEvidence || !servedEvidence) {
+    return null;
+  }
   const requestedClass = stepDownClassForModel(entry.requestedModel);
   const servedClass = stepDownClassForModel(entry.resolvedModel ?? entry.responseModel);
   if (!requestedClass || !servedClass || stepDownClassRank[servedClass] <= stepDownClassRank[requestedClass]) {
