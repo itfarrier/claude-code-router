@@ -1,0 +1,10 @@
+{
+  "command": "npm run --silent test:unit -w @claude-code-router/core",
+  "exitCode": 1,
+  "targetTest": "gpt-5.6-sol with no indexes is opus",
+  "targetFile": "packages/core/test/unit/class-switch/classify.test.mjs",
+  "expected": "kind shelf, class opus, tierClass opus, score undefined",
+  "actual": "kind excluded, reason no-index",
+  "semanticAssessment": "Target failed on assertion: tier token sol should shelf as opus without indexes",
+  "output": "not ok 265 - gpt-5.6-sol with no indexes is opus\nExpected 'shelf' got 'excluded'"
+}

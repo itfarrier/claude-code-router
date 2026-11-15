@@ -1,21 +1,19 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: 3
-current_plan: Not started
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 3 complete — all phases complete
-last_updated: "2026-11-15T13:32:51.404Z"
+last_updated: "2026-11-15T14:14:50.451Z"
 last_activity: 2026-11-15
-last_activity_desc: Phase 3 complete
-state_head: 015ec0880ccd66c4ae2069e16c0d606277d01ec5
+last_activity_desc: Milestone v1.0 completed and archived
+state_head: f6871b4fca6ac01a917d42c9b7519d9a380b381c
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 11
   completed_plans: 11
-  percent: 100
 milestone_name: Automatic class switch
+current_phase: 3
 ---
 
 # Project State
@@ -29,13 +27,10 @@ See: .planning/PROJECT.md (updated 2026-11-15)
 
 ## Current Position
 
-Phase: 3
-Current Plan: Not started
-Total Plans in Phase: 4
-Status: All phases complete
-Last activity: 2026-11-15 — Phase 3 complete
-
-Progress: [██████████] 100%
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-11-15 — Milestone v1.0 completed and archived
 
 ## Performance Metrics
 
@@ -126,7 +121,15 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 | Category | Item | Status | Deferred At | Milestone |
 |----------|------|--------|-------------|-----------|
-| — | None | — | — | — |
+| uat_gaps | Phase 01 UAT — passed, 0 pending scenarios (acknowledged at close) | acknowledged | 2026-11-15 | v1.0 |
+| uat_gaps | Phase 02 UAT — passed, 0 pending scenarios (acknowledged at close) | acknowledged | 2026-11-15 | v1.0 |
+| uat_gaps | Phase 03 UAT — passed, 0 pending scenarios (acknowledged at close) | acknowledged | 2026-11-15 | v1.0 |
+| deferred_items | Phase 03 §1 — intermittent pre-existing plugin test failures (plugin-config-migration ×2, plugin-permissions ×1) | acknowledged | 2026-11-15 | v1.0 |
+| deferred_items | Phase 03 §2 — latent: runtime-data-dir CDN cache shadows the repo catalog (currently byte-identical) | acknowledged | 2026-11-15 | v1.0 |
+| deferred_items | Phase 03 §3 — 14 pre-existing `npm run typecheck` errors (11 in FORK-SEAMS-locked parent files) | acknowledged | 2026-11-15 | v1.0 |
+| deferred_items | Phase 03 §3 — uncommitted working-tree drift predating the fix wave (package.json allowScripts, planning-state rewrites) | acknowledged | 2026-11-15 | v1.0 |
+| deferred_items | Phase 03 §4 — wire tests skip without CCR_TEST_GATEWAY_ENTRY (opt-in gates) | acknowledged | 2026-11-15 | v1.0 |
+| deferred_items | Phase 03 §4 — build regenerates the tracked models.json from live sources (repo-design hazard) | acknowledged | 2026-11-15 | v1.0 |
 
 ## Session Continuity
 
@@ -134,3 +137,7 @@ Last session: 2026-11-15
 Stopped at: Phase 3 complete — all 3 phases complete; ready for milestone audit and completion
 Resume file: None
 Phases 1-3 all verified (verification passed after delegated human-item sign-offs), secured (0 open threats each), and complete. Next: final phase-1 verification refresh (covered files changed in phases 2-3), then /gsd-audit-milestone → /gsd-complete-milestone → /gsd-cleanup.
+
+## Operator Next Steps
+
+- Start the next milestone with $gsd-new-milestone
