@@ -1,0 +1,203 @@
+{
+  "credentialId": "[redacted]",
+  "provider": "SonnetProvider",
+  "requestedModel": "claude-opus-4-6",
+  "resolvedModel": "SonnetProvider/sonnet-live",
+  "responseHeaders": {
+    "content-type": "text/event-stream; charset=utf-8",
+    "x-ccr-provider-credential-chain": "[redacted]",
+    "x-ccr-requested-model": "claude-opus-4-6",
+    "x-ccr-served-model": "SonnetProvider/sonnet-live"
+  },
+  "responseModel": "claude-opus-4-6",
+  "routeTrace": {
+    "attemptCount": 1,
+    "complete": true,
+    "hopCount": 8,
+    "hops": [
+      {
+        "changes": [],
+        "durationMs": 1,
+        "kind": "snapshot",
+        "name": "request.ingress",
+        "phase": "ingress",
+        "seq": 0,
+        "startedOffsetMs": 0,
+        "status": "ok"
+      },
+      {
+        "changes": [
+          {
+            "after": "req-normalized-0",
+            "operation": "add",
+            "path": "/headers/x-client-request-id",
+            "scope": "headers"
+          }
+        ],
+        "durationMs": 1,
+        "kind": "mutation",
+        "name": "gateway.header-normalization",
+        "phase": "ingress",
+        "seq": 1,
+        "startedOffsetMs": 5,
+        "status": "ok"
+      },
+      {
+        "changes": [],
+        "decision": {
+          "diagnostics": [],
+          "policyId": "default",
+          "reason": "default",
+          "source": "default"
+        },
+        "durationMs": 1,
+        "kind": "decision",
+        "name": "builtins.default-route",
+        "phase": "routing",
+        "seq": 2,
+        "startedOffsetMs": 10,
+        "status": "noop"
+      },
+      {
+        "changes": [
+          {
+            "operation": "replace",
+            "path": "/body",
+            "scope": "body"
+          },
+          {
+            "after": "application/json",
+            "operation": "replace",
+            "path": "/headers/content-type",
+            "scope": "headers"
+          },
+          {
+            "after": "default",
+            "operation": "add",
+            "path": "/headers/x-ccr-route-reason",
+            "scope": "headers"
+          },
+          {
+            "after": "default",
+            "operation": "add",
+            "path": "/headers/x-ccr-route-source",
+            "scope": "headers"
+          },
+          {
+            "after": "claude-opus-4-6",
+            "operation": "add",
+            "path": "/headers/x-ccr-routed-model",
+            "scope": "headers"
+          }
+        ],
+        "decision": {
+          "diagnostics": [],
+          "reason": "default",
+          "source": "default"
+        },
+        "durationMs": 1,
+        "kind": "mutation",
+        "name": "router.route-output",
+        "phase": "routing",
+        "seq": 3,
+        "startedOffsetMs": 15,
+        "status": "ok",
+        "target": {
+          "model": "claude-opus-4-6"
+        }
+      },
+      {
+        "changes": [],
+        "decision": {
+          "reason": "fallback:off",
+          "source": "execution-plan"
+        },
+        "durationMs": 1,
+        "kind": "decision",
+        "name": "fallback.execution-plan",
+        "phase": "planning",
+        "seq": 4,
+        "startedOffsetMs": 20,
+        "status": "noop",
+        "target": {
+          "model": "SonnetProvider/sonnet-live"
+        }
+      },
+      {
+        "attempt": 1,
+        "changes": [
+          {
+            "operation": "replace",
+            "path": "/body/model",
+            "scope": "body"
+          },
+          {
+            "after": "SonnetProvider/sonnet-live",
+            "before": "claude-opus-4-6",
+            "operation": "replace",
+            "path": "/routing/model",
+            "scope": "routing"
+          }
+        ],
+        "durationMs": 1,
+        "kind": "mutation",
+        "name": "provider.capability-routing",
+        "phase": "capability",
+        "seq": 5,
+        "startedOffsetMs": 25,
+        "status": "ok",
+        "target": {
+          "model": "SonnetProvider/sonnet-live"
+        }
+      },
+      {
+        "attempt": 1,
+        "changes": [
+          {
+            "after": "SonnetProvider/sonnet-live",
+            "before": "claude-opus-4-6",
+            "operation": "replace",
+            "path": "/body/model",
+            "scope": "body"
+          }
+        ],
+        "durationMs": 1,
+        "kind": "attempt",
+        "name": "upstream.attempt.prepare",
+        "phase": "attempt",
+        "seq": 6,
+        "startedOffsetMs": 30,
+        "status": "ok",
+        "target": {
+          "credentialId": "cred-sonnet",
+          "credentialCandidates": [
+            "cred-sonnet"
+          ],
+          "model": "SonnetProvider/sonnet-live",
+          "protocol": "anthropic_messages",
+          "provider": "SonnetProvider"
+        }
+      },
+      {
+        "attempt": 1,
+        "changes": [],
+        "durationMs": 1,
+        "kind": "outcome",
+        "name": "upstream.attempt.outcome",
+        "outcome": {
+          "statusCode": 200
+        },
+        "phase": "outcome",
+        "seq": 7,
+        "startedOffsetMs": 35,
+        "status": "ok",
+        "target": {
+          "model": "SonnetProvider/sonnet-live",
+          "provider": "SonnetProvider"
+        }
+      }
+    ],
+    "truncated": false,
+    "version": 2
+  }
+}

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -650,6 +652,56 @@ test("expanded Reason uses the class-switch decision, not the fallback hop", () 
   const unmarkedHtml = expandedDetailsMarkup({ ...stepDownRequestLogEntry, routeTrace: unmarkedTrace });
   assert.doesNotMatch(unmarkedHtml, /Reason/);
   assert.doesNotMatch(unmarkedHtml, /fallback:model-chain/);
+});
+
+// The production-generated projection below is written by the core
+// request-log test (packages/core/test/unit/class-switch/step-down.test.mjs)
+// from a real persisted GatewayRequestPipeline entry — never hand-assembled —
+// so this renderer coverage sees exactly what production currently writes,
+// including its unrelated execution-plan fallback decision.
+const stepDownProductionFixturePath = path.resolve(
+  process.cwd(),
+  "packages",
+  "ui",
+  "test",
+  "fixtures",
+  "step-down-production-log.json"
+);
+
+test("expanded real swap log shows the production class-switch Reason without using fallback hops", () => {
+  const projection = JSON.parse(readFileSync(stepDownProductionFixturePath, "utf8")) as Partial<RequestLogEntry>;
+  const entry: RequestLogEntry = { ...sampleRequestLogEntry, ...projection };
+  const hops = entry.routeTrace?.hops ?? [];
+  const fallbackReasons = hops
+    .filter((hop) => hop.decision?.source === "execution-plan")
+    .map((hop) => hop.decision?.reason ?? "")
+    .filter((reason) => reason.length > 0);
+  // The production trace itself retains the real execution-plan fallback
+  // decision, so the negative control below exercises a real fallback hop.
+  assert.ok(fallbackReasons.length > 0);
+
+  const html = expandedDetailsMarkup(entry);
+  assert.match(html, /Reason/);
+  assert.match(html, /no live Opus triple/);
+  // The actual fallback reason is never displayed.
+  for (const reason of fallbackReasons) {
+    assert.ok(!html.includes(reason), reason);
+  }
+
+  // Removing only the class-switch hops (and updating the hop count to the
+  // filtered length) omits Reason — the fallback reason never surfaces
+  // instead.
+  const unmarkedHops = hops.filter((hop) => hop.decision?.source !== "class-switch");
+  const unmarkedTrace = { ...entry.routeTrace, hopCount: unmarkedHops.length, hops: unmarkedHops } as RequestRouteTrace;
+  const unmarkedHtml = expandedDetailsMarkup({
+    ...entry,
+    routeHopCount: unmarkedHops.length,
+    routeTrace: unmarkedTrace
+  });
+  assert.doesNotMatch(unmarkedHtml, /Reason/);
+  for (const reason of fallbackReasons) {
+    assert.ok(!unmarkedHtml.includes(reason), reason);
+  }
 });
 
 test("safeguards follow the configured provider identity, not the display name", () => {
