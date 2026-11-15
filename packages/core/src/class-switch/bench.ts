@@ -6,7 +6,11 @@ import type { AppConfig, GatewayProviderConfig, GatewayProviderProbeRequest, Pro
 import { loadAppConfig } from "@ccr/core/config/config";
 import { readShelfSnapshot, type ShelfRow } from "@ccr/core/class-switch/catalog";
 import { probeGatewayProvider } from "@ccr/core/providers/probe";
-import { activeProviderCredentials } from "@ccr/core/providers/runtime-topology";
+import {
+  activeProviderCredentials,
+  providerCredentialRuntimeId,
+  providerCredentialSlug
+} from "@ccr/core/providers/runtime-topology";
 import { resolveRuntimeDataDir } from "@ccr/core/runtime/app-paths";
 
 const bench5xxMs = 30_000;
@@ -717,7 +721,14 @@ async function runBenchProbeTick(config: AppConfig): Promise<void> {
     if (!credential) {
       continue;
     }
-    const slug = credential.credentialId?.trim() || "cred:0";
+    // Resolve the slug the same way every other bench consumer does: the
+    // runtime id over the CONFIGURED credential list — the active list skips
+    // disabled and keyless credentials, so its own index is not the
+    // configured one — slugified. That is the exact slug the executor
+    // records fix-key rows under; ProviderCredentialConfig has no
+    // credentialId property, so the previous read always fell back to
+    // "cred:0" and never matched a real row.
+    const slug = providerCredentialSlug(providerCredentialRuntimeId(provider, credential));
     const fixKey = benchRows.get(benchRowKey(providerRow.provider, slug, "*"));
     if (fixKey?.probe === false && fixKey.until === undefined) {
       continue;

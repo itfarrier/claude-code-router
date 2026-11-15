@@ -328,7 +328,7 @@ test("shelf model with no fresh time is due between sixty and one twenty seconds
     const mod = await benchImport();
     mod.setClassSwitchBenchNowForTest?.(() => FIXED_NOW);
     startBench(
-      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ credentialId: "cred:m", enabled: true, api_key: "sk-test" }] }] },
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ id: "cred-m", enabled: true, api_key: "sk-test" }] }] },
       {
         now: () => FIXED_NOW,
         schedule: oneShotSchedule(schedules),
@@ -360,11 +360,11 @@ test("a future until is the next probe time", async () => {
       shelves: { ...emptyShelves(), opus: [{ provider: "BenchProvider", model: "alpha/model-a" }] },
       updatedAt: new Date().toISOString()
     });
-    await recordClassRefusal(429, "BenchProvider", "alpha/model-a", "cred:n", hdr(), {
+    await recordClassRefusal(429, "BenchProvider", "alpha/model-a", "cred-n", hdr(), {
       metadata: { headers: { "x-ratelimit-reset": String(future) } }
     });
     startBench(
-      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ credentialId: "cred:n", api_key: "sk" }] }] },
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ id: "cred-n", api_key: "sk" }] }] },
       {
         now: () => FIXED_NOW,
         schedule: oneShotSchedule(),
@@ -392,7 +392,7 @@ test("remaining requests eleven skips the extra probe", async () => {
       shelves: { ...emptyShelves(), opus: [{ provider: "BenchProvider", model: "alpha/model-a" }] },
       updatedAt: new Date().toISOString()
     });
-    await recordClassSuccess("BenchProvider", "alpha/model-a", "cred:o", {
+    await recordClassSuccess("BenchProvider", "alpha/model-a", "cred-o", {
       headers: hdr({
         "x-ratelimit-remaining-requests": "11",
         "x-ratelimit-reset-requests": "2m0s"
@@ -400,7 +400,7 @@ test("remaining requests eleven skips the extra probe", async () => {
       durationMs: 50
     });
     startBench(
-      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ credentialId: "cred:o", api_key: "sk" }] }] },
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ id: "cred-o", api_key: "sk" }] }] },
       {
         now: () => FIXED_NOW,
         schedule: oneShotSchedule(),
@@ -441,7 +441,7 @@ test("probe uses mode connectivity and one model", async () => {
     });
     mod.markShelfDueForTest?.("BenchProvider", "alpha/model-a", FIXED_NOW);
     startBench(
-      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ credentialId: "cred:r", api_key: "sk" }] }] },
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ id: "cred-r", api_key: "sk" }] }] },
       {
         now: () => FIXED_NOW + 130_000,
         schedule: oneShotSchedule(),
@@ -464,7 +464,7 @@ test("probe uses mode connectivity and one model", async () => {
 test("probe false row is not passed to the probe mock", async () => {
   await withBenchEnv(async () => {
     const probeCalls = [];
-    await refuse({ status: 403, provider: "BenchProvider", model: "alpha/model-a", credentialId: "cred:s", headers: hdr() });
+    await refuse({ status: 403, provider: "BenchProvider", model: "alpha/model-a", credentialId: "cred-s", headers: hdr() });
     const mod = await benchImport();
     mod.setClassSwitchBenchNowForTest?.(() => FIXED_NOW + 200_000);
     await writeShelfSnapshot({
@@ -474,7 +474,7 @@ test("probe false row is not passed to the probe mock", async () => {
       updatedAt: new Date().toISOString()
     });
     startBench(
-      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ credentialId: "cred:s", api_key: "sk" }] }] },
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ id: "cred-s", api_key: "sk" }] }] },
       {
         now: () => FIXED_NOW + 200_000,
         schedule: oneShotSchedule(),
@@ -505,12 +505,12 @@ test("the probe tick loads the saved bench before deciding", async () => {
     mkdirSync(path.dirname(file), { recursive: true });
     writeFileSync(
       file,
-      JSON.stringify({ "BenchProvider\0cred:x\0alpha/model-a": { until: FIXED_NOW + 600_000, probe: true } }),
+      JSON.stringify({ "BenchProvider\0cred-x\0alpha/model-a": { until: FIXED_NOW + 600_000, probe: true } }),
       "utf8"
     );
     const probeCalls = [];
     startBench(
-      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ credentialId: "cred:x", api_key: "sk" }] }] },
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ id: "cred-x", api_key: "sk" }] }] },
       {
         now: () => FIXED_NOW,
         schedule: oneShotSchedule(),
@@ -545,12 +545,12 @@ test("the probe tick follows the newest sampled row", async () => {
     writeFileSync(
       file,
       JSON.stringify({
-        "BenchProvider\0cred:old\0alpha/model-a": {
+        "BenchProvider\0cred-old\0alpha/model-a": {
           remainingRequests: 20,
           resetDurationMs: 60_000,
           sampledAt: FIXED_NOW - 1000
         },
-        "BenchProvider\0cred:new\0alpha/model-a": {
+        "BenchProvider\0cred-new\0alpha/model-a": {
           remainingRequests: 2,
           resetDurationMs: 60_000,
           sampledAt: FIXED_NOW
@@ -561,7 +561,7 @@ test("the probe tick follows the newest sampled row", async () => {
     mod.markShelfDueForTest?.("BenchProvider", "alpha/model-a", FIXED_NOW);
     const probeCalls = [];
     startBench(
-      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ credentialId: "cred:new", api_key: "sk" }] }] },
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ id: "cred-new", api_key: "sk" }] }] },
       {
         now: () => FIXED_NOW,
         schedule: oneShotSchedule(),
@@ -577,6 +577,46 @@ test("the probe tick follows the newest sampled row", async () => {
     // newest sample allows.
     assert.equal(probeCalls.length, 1);
     assert.equal(probeCalls[0].mode, "connectivity");
+  });
+});
+
+test("a saved fix-key row under the credential's real slug suppresses the probe", async () => {
+  await withBenchEnv(async () => {
+    const mod = await benchImport();
+    mod.setClassSwitchBenchNowForTest?.(() => FIXED_NOW + 130_000);
+    await writeShelfSnapshot({
+      excluded: [],
+      review: [],
+      shelves: { ...emptyShelves(), opus: [{ provider: "BenchProvider", model: "alpha/model-a" }] },
+      updatedAt: new Date().toISOString()
+    });
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const file = benchSnapshotPath();
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(
+      file,
+      JSON.stringify({ "BenchProvider\0cred-fix\0*": { probe: false } }),
+      "utf8"
+    );
+    mod.markShelfDueForTest?.("BenchProvider", "alpha/model-a", FIXED_NOW);
+    const probeCalls = [];
+    startBench(
+      { Providers: [{ name: "BenchProvider", models: ["alpha/model-a"], credentials: [{ id: "cred-fix", api_key: "sk" }] }] },
+      {
+        now: () => FIXED_NOW + 130_000,
+        schedule: oneShotSchedule(),
+        probeProvider: async (r) => {
+          probeCalls.push(r);
+          return { capabilities: [], models: [], protocols: [] };
+        }
+      }
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    stopBench();
+    // The tick resolves the credential's real slug from id: — the same slug
+    // the executor records fix-key rows under — so the saved probe:false row
+    // keeps the probe off even past the due mark.
+    assert.equal(probeCalls.length, 0);
   });
 });
 
