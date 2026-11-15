@@ -28,7 +28,7 @@ import {
 import { isCodexResponsesCompactPath, type ContextArchiveResponseMode } from "@ccr/core/gateway/context-archive/protocol";
 import { adaptRouteRequestBody, restoreRouteRequestBody } from "@ccr/core/routing/protocol-adapter";
 import { reserveApiKeyLimits } from "@ccr/core/gateway/auth/api-key-authorizer";
-import { isClassAttempt, recordStepDownSuccess } from "@ccr/core/class-switch/seam";
+import { isClassAttempt, recordStepDownSuccessFromTarget } from "@ccr/core/class-switch/seam";
 import { recordProviderCredentialOutcome } from "@ccr/core/providers/credential-pool";
 import { codexApplyPatchBridgeResponseStream, prepareCodexApplyPatchBridgeRequest } from "@ccr/core/gateway/features/codex-patch-bridge";
 import { codexMultiAgentBridgeResponseStream, prepareCodexMultiAgentBridgeRequest } from "@ccr/core/gateway/features/codex-multi-agent-bridge";
@@ -923,11 +923,10 @@ export class GatewayRequestPipeline {
         // successes record nothing, so no header is set for them either. The
         // call precedes every response.writeHead path and every log read of
         // responseHeaders below.
-        const swapNotice = recordStepDownSuccess({
+        const swapNotice = recordStepDownSuccessFromTarget({
           credentialLabel: upstreamResult.attempt.credentialIds?.[0],
           hadRequestedClassFailure: upstreamResult.failedAttempts.length > 0,
           requestedModel,
-          servedModel: routedModel,
           target: upstreamResult.attempt.target
         });
         if (swapNotice) {
