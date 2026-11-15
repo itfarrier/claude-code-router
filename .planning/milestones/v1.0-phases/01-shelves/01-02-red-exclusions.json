@@ -1,0 +1,10 @@
+{
+  "command": "node --test .test-dist/core/test/class-switch/classify.test.js",
+  "exitCode": 1,
+  "targetTest": "gemini-4-hydrogen batch is excluded",
+  "targetFile": "packages/core/test/unit/class-switch/classify.test.mjs",
+  "expected": "kind excluded, reason batch",
+  "actual": "kind shelf",
+  "semanticAssessment": "Batch colon segment should exclude before score placement",
+  "output": "not ok 15 - gemini-4-hydrogen batch is excluded"
+}

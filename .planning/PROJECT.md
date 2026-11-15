@@ -66,6 +66,8 @@ Upstream notes that the implementation must respect:
 
 Config mode is `yolo`. Granularity is `coarse`. Phase numbers start at 1 because this repo has no earlier GSD phases.
 
+**Shipped v1.0 "Automatic class switch" (2026-11-15):** 3 phases, 11 plans, 24 tasks — 122 commits, 108 files, +19,344/−220. All class-switch code lives in `packages/core/src/class-switch/` behind the FORK-SEAMS seams; every parent-file edit is a recorded seam call. All 14 v1 requirements validated (33/33, 25/25 + 1 designed supersession, 49/49 verification truths; 0 open security threats across 3 registers; Nyquist compliant ×3). Carried to the next milestone backlog: 14 pre-existing `npm run typecheck` errors in FORK-SEAMS-locked parent files, the build-regenerates-`models.json` hazard, intermittent plugin/timing test flakes, the latent CDN-catalog-cache shadow, and the unhardened thin-share advisory.
+
 ## Constraints
 
 - **Codebase**: Put class, score, bench, catalog, and notice code in `packages/core/src/class-switch/`. Touch a parent file only through a seam in `.planning/research/FORK-SEAMS.md`. Leave `credential-pool.ts`, `profiles/service.ts`, and `config.ts` unchanged.
@@ -106,4 +108,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-15 after Phase 3*
+*Last updated: 2026-11-15 after v1.0 milestone*
