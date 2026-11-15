@@ -795,6 +795,35 @@ test("class-level recovery ignores request-specific capability differences", asy
   });
 });
 
+test("a swap recorded during the notice read survives the older swap's recovery", async () => {
+  await withStepDownGateway(shelf(), async () => {
+    recordSwapNotice(swapNoticeRecord({ requestedClass: "opus", servedClass: "sonnet" }));
+    // No registry injected: the read crosses the real loadAppConfig await.
+    const pendingRead = readSwapNotice();
+    // A newer, unrelated swap replaces the singleton while the read is still
+    // awaiting the config load — the old record's recovery decision must not
+    // clear or replace the newer record.
+    const fableSwap = recordSwapNotice(swapNoticeRecord({
+      model: "opus-live",
+      requestedClass: "fable",
+      servedClass: "opus"
+    }));
+    const notice = await pendingRead;
+    assert.ok(notice);
+    assert.equal(notice, fableSwap);
+    assert.equal(notice.requestedClass, "fable");
+    assert.equal(notice.servedClass, "opus");
+
+    // The replacement survives: the Fable record is returned for its own
+    // reconciliation (no live Fable triple in the empty snapshot).
+    const followUp = await readSwapNotice({ modelRegistry: sonnetRegistry() });
+    assert.ok(followUp);
+    assert.equal(followUp.requestedClass, "fable");
+    assert.equal(followUp.servedClass, "opus");
+    assert.equal(followUp.model, "opus-live");
+  });
+});
+
 test("an actual step-down success records the reason safeguards and route fields", async () => {
   await withStepDownGateway(
     shelf({ sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }] }),

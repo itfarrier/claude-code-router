@@ -87,6 +87,13 @@ export async function readSwapNotice(options: { modelRegistry?: ModelRegistry } 
     return null;
   }
   const registry = options.modelRegistry ?? modelRegistryForConfig(await loadAppConfig());
+  // The config await above can let a newer swap replace the singleton. Only
+  // the captured record may apply its own recovery decision: a replacement
+  // stays untouched and is returned for its own reconciliation instead of
+  // being cleared or judged by the stale record's class liveness.
+  if (currentSwapNotice !== record) {
+    return currentSwapNotice;
+  }
   if (hasLiveTripleForClass(record.requestedClass, registry)) {
     currentSwapNotice = null;
     return null;
