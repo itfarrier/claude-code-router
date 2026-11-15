@@ -139,13 +139,17 @@ test("SwapNoticeBanner renders the current swap as a polite three-row status", (
   // Row 1: capitalized classes and 24-hour HH:mm since label.
   const since = swapSinceLabel();
   assert.match(html, new RegExp(`Opus is replaced by Sonnet since ${since}`));
-  // Row 2: model, provider, credential label, and reason in one detail line.
-  assert.match(html, /Serving sonnet-live on OpenRouter · token cred:sonnet · no live Opus triple/);
+  // Row 2: model, provider, credential label, and reason in one detail line,
+  // with the model id and credential label rendered as mono spans.
+  assert.match(
+    html,
+    /Serving <span [^>]*title="sonnet-live"[^>]*>sonnet-live<\/span> on OpenRouter · token <span [^>]*title="cred:sonnet"[^>]*>cred:sonnet<\/span> · no live Opus triple/
+  );
   // Row 3: safeguards sentence for the non-Anthropic served provider.
   assert.match(html, /Auto mode will not receive Anthropic safeguards from this non-Anthropic provider\./);
   // Three content rows render in title → detail → safeguards order.
   const titleIndex = html.indexOf("Opus is replaced by Sonnet since");
-  const detailIndex = html.indexOf("Serving sonnet-live");
+  const detailIndex = html.indexOf("Serving <span");
   const safeguardsIndex = html.indexOf("Auto mode will not receive Anthropic safeguards");
   assert.ok(titleIndex >= 0 && detailIndex > titleIndex && safeguardsIndex > detailIndex);
   // Model id and credential label render mono with title tooltips.
@@ -190,7 +194,10 @@ test("SwapNoticeBanner renders Chinese copy for the swap notice", () => {
   const html = swapBannerMarkup(swapNoticeFixture, "zh");
 
   assert.match(html, new RegExp(`自 ${since} 起，Opus 由 Sonnet 代答`));
-  assert.match(html, /服务模型 sonnet-live（OpenRouter）· 令牌 cred:sonnet · no live Opus triple/);
+  assert.match(
+    html,
+    /服务模型 <span [^>]*title="sonnet-live"[^>]*>sonnet-live<\/span>（OpenRouter）· 令牌 <span [^>]*title="cred:sonnet"[^>]*>cred:sonnet<\/span> · no live Opus triple/
+  );
   assert.match(html, /非 Anthropic 供应商不提供 Anthropic safeguards，auto 模式将不会收到该字段。/);
   assert.match(html, /role="status"/);
   assert.match(html, /network-body-warning/);
@@ -201,7 +208,61 @@ test("SwapNoticeBanner omits the safeguards line when the served provider is Ant
 
   assert.doesNotMatch(html, /safeguards from this non-Anthropic provider/);
   assert.match(html, /Opus is replaced by Sonnet since/);
-  assert.match(html, /Serving sonnet-live on OpenRouter/);
+  assert.match(html, /Serving <span [^>]*title="sonnet-live"[^>]*>sonnet-live<\/span> on OpenRouter/);
+});
+
+function mainLayoutMarkup(swapNotice: SwapNotice | null): string {
+  return renderToStaticMarkup(
+    <AppI18nContext.Provider value={appCopy.en}>
+      <MainLayout
+        activeView="networking"
+        agentAnalysisEnabled={false}
+        compactLayout={false}
+        config={appConfigFixture()}
+        copy={appCopy.en}
+        gatewayActionBusy={false}
+        gatewayEndpoint="http://127.0.0.1:3456"
+        gatewayStartupError="Gateway failed to start."
+        gatewayStatus={fallbackGatewayStatus}
+        isMac={false}
+        needsTrafficLightSafeArea={false}
+        networkCaptureEnabled={false}
+        onOpenServerSettings={() => undefined}
+        onOpenSettings={() => undefined}
+        onOpenUpdate={() => undefined}
+        onSelectNavigationItem={() => undefined}
+        onToggleSidebar={() => undefined}
+        requestLogsEnabled={false}
+        shouldReduceMotion={true}
+        sidebarOpen
+        swapNotice={swapNotice}
+        toggleGatewayService={() => undefined}
+        updateActionBusy={false}
+        updateStatus={fallbackUpdateStatus}
+        viewProps={{} as never}
+        visibleNavigation={navigation}
+      />
+    </AppI18nContext.Provider>
+  );
+}
+
+test("MainLayout mounts the swap banner below the startup error banner", () => {
+  const html = mainLayoutMarkup(swapNoticeFixture);
+
+  assert.match(html, /role="status"/);
+  assert.match(html, /aria-live="polite"/);
+  assert.match(html, /Opus is replaced by Sonnet since/);
+  // Mount geometry matches the error banner rhythm (20px sides, 12px top).
+  assert.match(html, /network-body-warning[^"]*mx-5 mt-3 max-\[720px\]:mx-3/);
+  // The swap banner mounts directly below the startup error banner.
+  const errorIndex = html.indexOf("Service failed to start");
+  const swapIndex = html.indexOf("Opus is replaced by Sonnet since");
+  assert.ok(errorIndex >= 0 && swapIndex > errorIndex);
+
+  // Without a notice no banner mounts at all.
+  const emptyHtml = mainLayoutMarkup(null);
+  assert.doesNotMatch(emptyHtml, /role="status"/);
+  assert.ok(!emptyHtml.includes("Opus is replaced by Sonnet"));
 });
 
 test("Fusion page does not render a standalone Grok media panel", () => {

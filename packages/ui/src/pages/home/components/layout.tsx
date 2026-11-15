@@ -1,13 +1,13 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import type { SwapNotice } from "@ccr/core/contracts/app";
 import { MorphIcon } from "@musistudio/lucide-morph-react";
 import { collapseSidebarToExpandInspectorMorph } from "@/lib/morph-icon";
 import {
-  AnimatePresence, AppConfig, AppCopy, Button, Check, CircleAlert, cn, EndpointTitleBar,
-  AppUpdateStatus, GatewayStatus, listSpringTransition, LucideIcon, motion, motionEase,
+  AnimatePresence, AppConfig, AppCopy, ArrowDown, Button, Check, CircleAlert, cn, EndpointTitleBar,
+  AppUpdateStatus, GatewayStatus, interpolateTemplate, listSpringTransition, LucideIcon, motion, motionEase,
   LoaderCircle, NavigationId, RefreshCw,
   reducedMotionTransition, ServiceControlButton, Settings, ViewId,
-  useAppText, ViewMotionShell, viewUsesInternalScroll
+  useAppText, useReducedMotion, ViewMotionShell, viewUsesInternalScroll
 } from "../shared/index";
 import { ApiKeysView } from "./api-keys";
 import { AgentAnalysisView, OverviewView } from "./dashboard";
@@ -109,6 +109,7 @@ export function MainLayout({
   onToggleSidebar,
   shouldReduceMotion,
   sidebarOpen,
+  swapNotice,
   toggleGatewayService,
   updateActionBusy,
   updateStatus,
@@ -135,6 +136,7 @@ export function MainLayout({
   onToggleSidebar: () => void;
   shouldReduceMotion: boolean | null;
   sidebarOpen: boolean;
+  swapNotice?: SwapNotice | null;
   toggleGatewayService: () => void;
   updateActionBusy: boolean;
   updateStatus: AppUpdateStatus;
@@ -282,6 +284,7 @@ export function MainLayout({
           message={gatewayStartupError}
           onOpenServerSettings={onOpenServerSettings}
         />
+        <SwapNoticeBanner className="mx-5 mt-3 max-[720px]:mx-3" notice={swapNotice} />
         <div
           className={cn(
             "min-h-0 flex-1 px-5 pb-5 pt-5 max-[720px]:px-3 max-[720px]:pb-3 max-[720px]:pt-3",
@@ -440,10 +443,103 @@ export type SwapNoticeBannerProps = {
   notice?: SwapNotice | null;
 };
 
-// RED-only stub (03-03): compiles and renders nothing until the GREEN task
-// implements the persistent swap banner beside GatewayStartupErrorBanner.
-export function SwapNoticeBanner(_props: SwapNoticeBannerProps) {
-  return null;
+const swapSinceHourFormat = { hour: "2-digit", hour12: false, minute: "2-digit" } as const;
+
+function capitalizeSwapClass(value: SwapNotice["requestedClass"] | SwapNotice["servedClass"]): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function swapSinceLabel(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat(undefined, swapSinceHourFormat).format(date);
+}
+
+// The detail line interleaves plain text with mono model/credential spans so
+// long ids stay identifiable: they truncate with a title tooltip and never
+// widen the banner. Only React text nodes are rendered — never raw markup.
+type SwapNoticeDetailValues = {
+  credential: string;
+  model: string;
+  provider: string;
+  reason: string;
+};
+
+function swapDetailNodes(template: string, values: SwapNoticeDetailValues): ReactNode[] {
+  return template
+    .split(/\{([^{}]+)\}/g)
+    .map((part, index): ReactNode => {
+      if (index % 2 === 0) {
+        return part;
+      }
+      if (part === "model" || part === "credential") {
+        const text = part === "model" ? values.model : values.credential;
+        return (
+          <span className="inline-block max-w-full truncate align-baseline font-mono" key={index} title={text}>
+            {text}
+          </span>
+        );
+      }
+      if (part === "provider") {
+        return values.provider;
+      }
+      if (part === "reason") {
+        return values.reason;
+      }
+      return `{${part}}`;
+    });
+}
+
+export function SwapNoticeBanner({ className, notice }: SwapNoticeBannerProps) {
+  const t = useAppText();
+  const shouldReduceMotion = useReducedMotion();
+  if (!notice) {
+    return null;
+  }
+
+  const requested = capitalizeSwapClass(notice.requestedClass);
+  const served = capitalizeSwapClass(notice.servedClass);
+  const since = swapSinceLabel(notice.sinceAt);
+
+  return (
+    <motion.div
+      animate={{ opacity: 1 }}
+      aria-live="polite"
+      className={cn(
+        "app-no-drag flex min-w-0 items-start gap-3 network-body-warning rounded-md border px-3 py-2 text-[12px]",
+        className
+      )}
+      initial={{ opacity: 0 }}
+      role="status"
+      transition={shouldReduceMotion ? reducedMotionTransition : { duration: 0.15, ease: motionEase }}
+    >
+      <ArrowDown className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="break-words font-semibold">
+          {interpolateTemplate(t("{Requested} is replaced by {Served} since {HH:mm}"), {
+            "HH:mm": since,
+            Requested: requested,
+            Served: served
+          })}
+        </div>
+        <div className="mt-0.5 break-words">
+          {swapDetailNodes(t("Serving {model} on {provider} · token {credential} · {reason}"), {
+            credential: notice.credentialLabel,
+            model: notice.model,
+            provider: notice.provider,
+            reason: notice.reason
+          })}
+        </div>
+        {!notice.safeguardsApplies ? (
+          <div className="mt-0.5 break-words">
+            {t("Auto mode will not receive Anthropic safeguards from this non-Anthropic provider.")}
+          </div>
+        ) : null}
+      </div>
+    </motion.div>
+  );
 }
 
 function MainViewSwitch({

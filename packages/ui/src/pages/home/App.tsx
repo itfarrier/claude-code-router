@@ -40,6 +40,7 @@ import {
   AppDialogStack, FeedbackStack, LightToast, MainLayout, OnboardingLayout, PersistenceFeedback, shouldCheckForUpdateOnOpen
 } from "./components/index";
 import { hasAvailableGatewayModels } from "@ccr/core/contracts/app";
+import type { SwapNotice } from "@ccr/core/contracts/app";
 
 type ProfileOpenDialogState = {
   busy?: "" | "cli" | "app";
@@ -192,6 +193,7 @@ function App() {
   const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>(fallbackGatewayStatus);
   const [proxyNetworkSnapshot, setProxyNetworkSnapshot] = useState<ProxyNetworkSnapshot>(fallbackProxyNetworkSnapshot);
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus>(fallbackProxyStatus);
+  const [swapNotice, setSwapNotice] = useState<SwapNotice | null>(null);
   const [updateActionBusy, setUpdateActionBusy] = useState<"" | "check" | "download" | "install">("");
   const [updateActionError, setUpdateActionError] = useState("");
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
@@ -377,6 +379,12 @@ function App() {
         }),
         ccr.getProxyStatus().then((next) => {
           setProxyStatus((current) => preserveEqualPollingSnapshot(current, next));
+        }),
+        ccr.getSwapNotice().then((next) => {
+          setSwapNotice((current) => preserveEqualPollingSnapshot(current, next));
+        }).catch(() => {
+          // A failed notice read renders no banner; it never surfaces as an error.
+          setSwapNotice(null);
         }),
         refreshProfileRuntimeStatus()
       ]);
@@ -3246,6 +3254,7 @@ function App() {
               requestLogsEnabled={requestLogsEnabled}
               shouldReduceMotion={shouldReduceMotion}
               sidebarOpen={sidebarOpen}
+              swapNotice={swapNotice}
               toggleGatewayService={toggleGatewayService}
               updateActionBusy={Boolean(updateActionBusy)}
               updateStatus={updateDialogStatus}
