@@ -3,9 +3,9 @@ phase: "3"
 slug: "step-down"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-11-15"
 ---
 
@@ -42,9 +42,9 @@ created: "2026-11-15"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| pending | 03 | 0 | FALL-01 | — | Ordered attempt list: eligible requested-class rows precede all lower classes; empty requested class → next lower live triple returns success; response body retains Claude's requested model. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 03 | 0 | FALL-02 | — | Notice data: requested/served classes, served model, credential label, reason, safeguards applicability; clears when the requested class regains a live triple; both headers present together. | unit + component | `npm run test:unit -w @claude-code-router/core` + `npm run test:component -w @claude-code-router/ui` | ❌ W0 | ⬜ pending |
-| pending | 03 | 0 | FALL-03 | — | A lower class can succeed after higher-class attempts fail; error is terminal only when no class has an eligible live attempt. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
+| pending | 03 | 0 | FALL-01 | — | Ordered attempt list: eligible requested-class rows precede all lower classes; empty requested class → next lower live triple returns success; response body retains Claude's requested model. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 03 | 0 | FALL-02 | — | Notice data: requested/served classes, served model, credential label, reason, safeguards applicability; clears when the requested class regains a live triple; both headers present together. | unit + component | `npm run test:unit -w @claude-code-router/core` + `npm run test:component -w @claude-code-router/ui` | ✅ | ✅ green |
+| pending | 03 | 0 | FALL-03 | — | A lower class can succeed after higher-class attempts fail; error is terminal only when no class has an eligible live attempt. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -52,10 +52,10 @@ created: "2026-11-15"
 
 ## Wave 0 Requirements
 
-- [ ] Failing core tests for ordered class fallback, requested-class priority, all-class exhaustion, and the disabled gate; store RED output and run `gsd_run check tdd-red-evidence` before implementation (Phase 2 TDD pattern).
-- [ ] Tests for notice record creation, one-current-record behavior, and clear-on-live-again.
-- [ ] UI component tests (`renderToStaticMarkup` pattern) for banner absence, safeguards copy condition, `SD` pill, and expanded details.
-- [ ] Framework install: none. Existing Node and UI test runners are present.
+- [x] Failing core tests for ordered class fallback, requested-class priority, all-class exhaustion, and the disabled gate; store RED output and run `gsd_run check tdd-red-evidence` before implementation (Phase 2 TDD pattern). — DONE: 03-01-red.json → RED_EVIDENCE_OK
+- [x] Tests for notice record creation, one-current-record behavior, and clear-on-live-again. — DONE: notice tests in step-down.test.mjs (22 phase-3 core tests)
+- [x] UI component tests (`renderToStaticMarkup` pattern) for banner absence, safeguards copy condition, `SD` pill, and expanded details. — DONE: layout.test.tsx (127/127 component suite; 11 new UI tests)
+- [x] Framework install: none. Existing Node and UI test runners are present.
 
 ---
 
@@ -67,11 +67,19 @@ All phase behaviors have automated verification. Do not add a live provider call
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < one core unit-suite run
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < one core unit-suite run
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-11-15 — audit: all 3 map rows COVERED (FALL-01/02/03 via step-down.test.mjs 22 core tests + layout.test.tsx 11 UI tests); post-execution evidence: unit suite 1001 tests / 999 pass / 0 fail / 2 skipped (exit 0), component suite 127/127, full workspace suite exit 0 (core 1251/0, electron 45/45, ui 224/224), architecture 5/5.
+
+## Validation Audit 2026-11-15
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
