@@ -563,12 +563,15 @@ export async function fetchUpstreamWithFallback(input: {
             // confirmations and zero-remaining parks are stored — whether or
             // not the request carried a session. Only the tool-turn memory
             // needs a session id.
+            // The bench is a side channel: a disk write failure inside the
+            // record call must not discard the succeeded response or retry
+            // the request on the next credential.
             await recordClassSuccess(
               modelParts.provider,
               modelParts.model,
               attempt.credentialIds[0],
               { durationMs, headers: headerRecord }
-            );
+            ).catch(() => undefined);
             if (sessionId) {
               remember(sessionId, {
                 credentialId: attempt.credentialIds[0],
@@ -650,6 +653,10 @@ export async function fetchUpstreamWithFallback(input: {
               refusalBody = undefined;
             }
           }
+          // The bench is a side channel: a disk write failure inside the
+          // record call must not leak the stored refusal body (the catch
+          // block has no reference to the fetched response) or mislabel
+          // this leg as a network error.
           await recordClassRefusal(
             response.status,
             modelParts.provider,
@@ -657,7 +664,7 @@ export async function fetchUpstreamWithFallback(input: {
             attempt.credentialIds?.[0] ?? "*",
             Object.fromEntries(response.headers.entries()),
             refusalBody
-          );
+          ).catch(() => undefined);
         }
 
         discardLastClassFailure();

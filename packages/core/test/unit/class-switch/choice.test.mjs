@@ -1140,6 +1140,83 @@ test("a stopped class refusal keeps a readable body", async () => {
   });
 });
 
+test("a bench-file write failure keeps the refusal body readable", async () => {
+  await withClassGateway(twinModelShelf(), async () => {
+    const config = gatewayChoiceConfig();
+    const singleCredConfig = {
+      ...config,
+      Providers: [{ ...config.Providers[0], credentials: [{ api_key: "sk-fixture-key-one" }] }]
+    };
+    // Poison the bench snapshot path: the file name is a directory, so the
+    // snapshot's rename fails. The bench is a side channel — the disk error
+    // must not turn the refusal into a network error or lose the body.
+    const benchPath = path.join(process.env.CCR_INTERNAL_USER_DATA_DIR, "cache", "class-switch-bench.json");
+    mkdirSync(benchPath, { recursive: true });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+        headers: { "content-type": "application/json" },
+        status: 429
+      });
+    try {
+      const result = await fetchUpstreamWithFallback({
+        body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+        config: singleCredConfig,
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+      });
+      assert.equal(result.response.status, 429);
+      assert.equal(JSON.parse(await result.response.text()).error.message, "rate limited");
+      assert.deepEqual(result.failedAttempts, []);
+    } finally {
+      globalThis.fetch = originalFetch;
+      rmSync(benchPath, { recursive: true, force: true });
+    }
+    resetGatewayBench();
+  });
+});
+
+test("a bench-file write failure keeps a succeeded 2xx response", async () => {
+  await withClassGateway(twinModelShelf(), async () => {
+    const config = gatewayChoiceConfig();
+    const singleCredConfig = {
+      ...config,
+      Providers: [{ ...config.Providers[0], credentials: [{ api_key: "sk-fixture-key-one" }] }]
+    };
+    const benchPath = path.join(process.env.CCR_INTERNAL_USER_DATA_DIR, "cache", "class-switch-bench.json");
+    mkdirSync(benchPath, { recursive: true });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response("{}", { headers: { "content-type": "application/json" }, status: 200 });
+    try {
+      const result = await fetchUpstreamWithFallback({
+        body: Buffer.from(JSON.stringify({ messages: [{ content: "hi", role: "user" }], model: "claude-opus-4-6" })),
+        config: singleCredConfig,
+        coreAuthToken: "core-token",
+        fallback: { mode: "off", models: [], retryCount: 0 },
+        headers: {},
+        method: "POST",
+        path: "/v1/messages",
+        routedModel: "claude-opus-4-6",
+        upstreamUrl: "http://127.0.0.1:3456/v1/messages"
+      });
+      // The disk error inside the bench record must not discard the already
+      // succeeded response or retry the request.
+      assert.equal(result.response.status, 200);
+      assert.deepEqual(result.failedAttempts, []);
+    } finally {
+      globalThis.fetch = originalFetch;
+      rmSync(benchPath, { recursive: true, force: true });
+    }
+    resetGatewayBench();
+  });
+});
+
 test("the lifted tool_result image reaches the next shelf model", async () => {
   await withClassGateway(
     {
