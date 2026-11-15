@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable, Writable } from "node:stream";
 import test, { after } from "node:test";
+// Must stay the first import: it redirects the user-data dir before
+// config/constants.ts bakes the request-log DATADIR (see the support module).
+import { requestLogHome } from "../../support/step-down-request-log-home.mjs";
 import { recordClassRefusal, resetClassSwitchBenchForTest } from "@ccr/core/class-switch/bench.ts";
 import { writeShelfSnapshot } from "@ccr/core/class-switch/catalog.ts";
 import { clearSwapNotice, recordStepDownSuccess, recordSwapNotice, readSwapNotice } from "@ccr/core/class-switch/notice.ts";
@@ -17,13 +20,24 @@ import { createRouteExecutionPlan } from "@ccr/core/routing/execution-plan.ts";
 import { ModelRegistry } from "@ccr/core/routing/model-registry.ts";
 
 // Compiled tests bundle request-log-store.ts into this test file, so the log
-// writer's worker path must point at the compiled runtime worker (the
-// integration-suite pattern in october-issues-wire.test.mjs).
-requestLogRuntime.options.workerFile = path.resolve(__dirname, "../../runtime/request-log-worker.js");
+// writer's worker path must point at the compiled runtime worker. The build
+// drops the scope segment for scoped builds (unit scope compiles this file to
+// .test-dist/core/test/class-switch) but keeps it for the full suite
+// (.test-dist/core/test/unit/class-switch), so resolve the runtime worker
+// relative to whichever compiled layout exists — the same candidate list the
+// request-log-runtime integration suite uses.
+const compiledRuntimeWorkerFile = [
+  path.resolve(__dirname, "../../../runtime/request-log-worker.js"),
+  path.resolve(__dirname, "../../runtime/request-log-worker.js")
+].find(existsSync);
+assert.ok(compiledRuntimeWorkerFile, "compiled request-log-worker.js must exist");
+requestLogRuntime.options.workerFile = compiledRuntimeWorkerFile;
 
-// Stop the request-log writer thread so the test process can exit.
+// Stop the request-log writer thread and drop the suite's isolated home so the
+// test process can exit.
 after(async () => {
   await closeRequestLogRuntime(2000).catch(() => undefined);
+  rmSync(requestLogHome, { force: true, recursive: true });
 });
 
 const REQUESTED_MODEL = "claude-opus-4-6";
