@@ -33,7 +33,7 @@ function emptyShelves() {
 
 function benchRegistry() {
   return new ModelRegistry({
-    Providers: [{ models: ["alpha/model-a", "beta/model-b"], name: "BenchProvider" }],
+    Providers: [{ models: ["alpha/model-a", "beta/model-b", "gamma/model-c"], name: "BenchProvider" }],
     virtualModelProfiles: []
   });
 }
@@ -142,7 +142,7 @@ test("a benched higher score yields the next live model", async () => {
   });
 });
 
-test("a fully parked opus shelf keeps the parent attempt", async () => {
+test("a fully parked opus shelf steps down to the next lower live class", async () => {
   await withShelfDataDir(async () => {
     await writeShelfSnapshot({
       excluded: [],
@@ -152,7 +152,8 @@ test("a fully parked opus shelf keeps the parent attempt", async () => {
         opus: [
           { model: "alpha/model-a", provider: "BenchProvider", score: 80 },
           { model: "beta/model-b", provider: "BenchProvider", score: 70 }
-        ]
+        ],
+        sonnet: [{ model: "gamma/model-c", provider: "BenchProvider", score: 35 }]
       },
       updatedAt: new Date().toISOString()
     });
@@ -162,8 +163,7 @@ test("a fully parked opus shelf keeps the parent attempt", async () => {
 
     const plan = classPlan("claude-opus-4-6", benchRegistry());
     assert.equal(plan.attempts.length, 1);
-    assert.equal(plan.attempts[0].model, "claude-opus-4-6");
-    assert.ok(!plan.attempts.some((attempt) => attempt.model?.includes("sonnet")));
+    assert.equal(plan.attempts[0].model, "BenchProvider/gamma/model-c");
   });
 });
 

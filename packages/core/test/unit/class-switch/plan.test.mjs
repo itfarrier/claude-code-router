@@ -184,14 +184,14 @@ test("opus and sonnet one-million suffix filters context window", async () => {
     });
     assert.deepEqual(
       classPlan("opus[1m]", registry).attempts.map((attempt) => attempt.model),
-      ["OpusP/wide"]
+      ["OpusP/wide", "SonnetP/wide"]
     );
     assert.deepEqual(
       classPlan("sonnet[1m]", registry).attempts.map((attempt) => attempt.model),
       ["SonnetP/wide"]
     );
     assert.equal(classPlan("best[1m]", registry).attempts[0]?.model, "OpusP/wide");
-    assert.equal(classPlan("opus[1m]", registry).attempts.length, 1);
+    assert.equal(classPlan("opus[1m]", registry).attempts.length, 2);
     const parentOnly = classPlan("opus[1m]", registry);
     assert.equal(parentOnly.attempts[0].model, "OpusP/wide");
   });
@@ -263,7 +263,7 @@ test("CCR_CLASS_SWITCH=0 keeps parent attempts with a valid shelf snapshot", asy
   });
 });
 
-test("empty corrupt and partial shelves keep or narrow parent attempts", async () => {
+test("empty corrupt and partial shelves error or narrow class attempts", async () => {
   await withShelfDataDir(async (dir) => {
     const registry = new ModelRegistry({
       Providers: [{ models: ["only"], name: "Alpha" }],
@@ -276,15 +276,15 @@ test("empty corrupt and partial shelves keep or narrow parent attempts", async (
       updatedAt: new Date().toISOString()
     });
     let plan = classPlan("best", registry);
-    assert.equal(plan.attempts[0].model, "best");
+    assert.deepEqual(plan.attempts, []);
 
     writeFileSync(shelfSnapshotPath(), "{not-json", "utf8");
     plan = classPlan("best", registry);
-    assert.equal(plan.attempts[0].model, "best");
+    assert.deepEqual(plan.attempts, []);
 
     writeFileSync(shelfSnapshotPath(), JSON.stringify({ bad: true }), "utf8");
     plan = classPlan("best", registry);
-    assert.equal(plan.attempts[0].model, "best");
+    assert.deepEqual(plan.attempts, []);
 
     await writeShelfSnapshot({
       excluded: [],
