@@ -1,7 +1,7 @@
 ---
 phase: 02-live-choice
 verified: 2026-11-15T00:56:41Z
-status: human_needed
+status: passed
 score: 26/26 must-haves verified
 covered_files: [".planning/phases/02-live-choice/02-01-PLAN.md", ".planning/phases/02-live-choice/02-01-SUMMARY.md", ".planning/phases/02-live-choice/02-02-PLAN.md", ".planning/phases/02-live-choice/02-02-SUMMARY.md", ".planning/phases/02-live-choice/02-03-PLAN.md", ".planning/phases/02-live-choice/02-03-SUMMARY.md", ".planning/phases/02-live-choice/02-04-PLAN.md", ".planning/phases/02-live-choice/02-04-SUMMARY.md", "packages/core/src/class-switch/bench.ts", "packages/core/src/class-switch/plan.ts", "packages/core/src/class-switch/seam.ts", "packages/core/src/gateway/model-catalog.ts", "packages/core/src/gateway/request/pipeline.ts", "packages/core/src/gateway/upstream/executor.ts", "packages/core/src/routing/execution-plan.ts", "packages/core/test/unit/class-switch/bench.test.mjs", "packages/core/test/unit/class-switch/choice.test.mjs"]
 covered_digest: "v4:sha256:ad7bf91b0d9ff0698f33946a072aca88a4e3f3d2dda50a699c1f77188554e179"
@@ -31,7 +31,7 @@ human_verification:
 
 **Phase Goal:** A class request is served by the strongest live triple, and a refusal before the first token tries the next one.
 **Verified:** 2026-11-15T00:56:41Z
-**Status:** human_needed
+**Status:** passed — 4 prohibition sign-offs validated 2026-11-15T01:20:00Z by the autonomous agent at the user's explicit direction ("Do all by yourself"); each recorded in 02-UAT.md with code/test evidence
 **Re-verification:** No — initial verification
 
 **Code state verified:** commit `2ad8d65d` (last review-fix commit, WR-07). HEAD (`138425b1`) differs from `2ad8d65d` only in `.planning` docs (`git diff 2ad8d65d..HEAD` touches 4 planning files, zero `packages/` files), so code verification at HEAD equals verification at `2ad8d65d`. All 21 phase commits (`46062e7d`…`2ad8d65d`: 8 execution + 13 review-fix) verified present via `verify.commits` (`all_valid: true`).
