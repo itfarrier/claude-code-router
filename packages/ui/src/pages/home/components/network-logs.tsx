@@ -2,13 +2,14 @@ import { prepareLogBodyForWorker, logBodyFullTextLimit } from "../shared/log-bod
 import { memo } from "react";
 import { requestLogOutcome } from "@ccr/core/contracts/app";
 import { Maximize2, Route, X } from "lucide-react";
-import type { RequestRouteTrace, RequestRouteTraceChange, RequestRouteTraceHop } from "@ccr/core/contracts/app";
+import type { RequestRouteTrace, RequestRouteTraceChange, RequestRouteTraceHop, SwapNoticeClass } from "@ccr/core/contracts/app";
 import {
   AnimatedIconSwap, Check, ChevronDown, ChevronLeft,
   ChevronRight, clampNumber, clientInitial, cn, Copy, copyTextToClipboard,
   createLogBodyPreviewText, Database, Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle, formatBytes, formatCompactNumber, formatDuration,
   formatLogDateTime, formatLogTokenSummary, formatNetworkRequestRaw, formatNetworkResponseRaw, formatRouteTracePath, formatUsdCost,
   FormattedLogBody,
+  interpolateTemplate,
   isJsonContainer, isLargeLogBody, jsonChildPath, logRequestModel,
   LogBodyFormatMode, logBodyLargeTextThreshold, logBodyPreviewTextLimit, LogBodyWorkerResponse,
   logResolvedRouteModel, logSelectOptions, motion, MoveRight, Network, networkCodeLabel,
@@ -813,6 +814,7 @@ function LogMobileCard({
   const numberLocale = useAppNumberLocale();
   const createdAt = useMemo(() => formatLogDateTime(item.createdAt), [item.createdAt]);
   const tokenSummary = useMemo(() => formatLogTokenSummary(item, t, numberLocale), [item, numberLocale, t]);
+  const stepDownDetails = stepDownDetailsForLog(item);
 
   return (
     <div className={cn("network-row rounded-md border text-[12px]", expanded && "network-row-selected")}>
@@ -843,6 +845,7 @@ function LogMobileCard({
                   R{item.retryAttempts.length}
                 </span>
               ) : null}
+              {stepDownDetails ? <LogStepDownPill details={stepDownDetails} /> : null}
             </div>
             <div className="mt-2 min-w-0 text-[11px] text-muted-foreground">
               <div className="truncate font-mono" title={createdAt}>{createdAt}</div>
@@ -903,6 +906,7 @@ const LogRow = memo(function LogRow({
   const numberLocale = useAppNumberLocale();
   const createdAt = useMemo(() => formatLogDateTime(item.createdAt), [item.createdAt]);
   const tokenSummary = useMemo(() => formatLogTokenSummary(item, t, numberLocale), [item, numberLocale, t]);
+  const stepDownDetails = stepDownDetailsForLog(item);
 
   return (
     <div>
@@ -933,6 +937,7 @@ const LogRow = memo(function LogRow({
               R{item.retryAttempts.length}
             </span>
           ) : null}
+          {stepDownDetails ? <LogStepDownPill details={stepDownDetails} /> : null}
         </div>
         <LogStreamCell entry={item} />
         <LogModelRouteCell entry={item} />
@@ -957,6 +962,7 @@ export function LogExpandedDetails({
   const t = useAppText();
   const numberLocale = useAppNumberLocale();
   const hasCredentialInfo = logHasCredentialInfo(entry);
+  const stepDownDetails = stepDownDetailsForLog(entry);
 
   return (
     <div className="network-detail border-b">
@@ -971,6 +977,7 @@ export function LogExpandedDetails({
           {entry.method} {entry.path}
         </span>
       </div>
+      {stepDownDetails ? <LogStepDownNotice details={stepDownDetails} /> : null}
       <div className={cn("network-body-meta grid grid-cols-2 gap-y-2 border-b px-3 py-2 text-[12px] sm:grid-cols-4", hasCredentialInfo ? "lg:grid-cols-12" : "lg:grid-cols-9")}>
         <LogMetric label={t("持续时间")} value={formatDuration(entry.durationMs)} />
         <LogMetric label={t("Stream")} value={entry.isStream ? t("Streaming") : t("Non-streaming")} />
@@ -1386,11 +1393,11 @@ function LogRetryAttempts({ attempts }: { attempts: RequestLogEntry["retryAttemp
   );
 }
 
-function LogMetric({ label, value }: { label: string; value: string }) {
+function LogMetric({ label, value, wrap }: { label: string; value: string; wrap?: boolean }) {
   return (
     <div className="min-w-0">
       <div className="network-muted truncate text-[11px]">{label}</div>
-      <div className="truncate font-mono text-[12px] font-semibold">{value}</div>
+      <div className={cn("font-mono text-[12px] font-semibold", wrap ? "break-words" : "truncate")}>{value}</div>
     </div>
   );
 }
@@ -1496,6 +1503,142 @@ function logHasCredentialInfo(entry: RequestLogEntry): boolean {
 
 function logCredentialCellLabel(entry: RequestLogEntry): string {
   return entry.credentialId || entry.credentialChain[0] || (entry.credentialSaturated ? "saturated" : "-");
+}
+
+// Step-down (SD) surfaces derive strictly from existing RequestLogEntry fields:
+// a pill or detail block renders only when both a requested and a served class
+// name are derivable and the served class is strictly lower than the requested
+// one. Missing, non-class, or inconsistent data renders nothing — no invented
+// class names, reasons, or dash substitutes.
+type StepDownLogDetails = {
+  credentialLabel?: string;
+  model: string;
+  provider?: string;
+  reason?: string;
+  requestedClass: SwapNoticeClass;
+  safeguardsApplies: boolean;
+  servedClass: SwapNoticeClass;
+};
+
+const stepDownClassRank: Record<SwapNoticeClass, number> = {
+  fable: 0,
+  opus: 1,
+  sonnet: 2,
+  haiku: 3
+};
+
+// Exact Claude class prefixes inside a hyphenated model id: "claude-opus-4-6"
+// and "sonnet-live" match, while "opusplan" does not (the token must end at a
+// word boundary). "best" is the Opus alias; a trailing [1m] window suffix is
+// tolerated before matching.
+const stepDownClassPatterns: Array<{ class: SwapNoticeClass; pattern: RegExp }> = [
+  { class: "fable", pattern: /(^|[^a-z0-9])fable(?=[^a-z0-9]|$)/i },
+  { class: "opus", pattern: /(^|[^a-z0-9])opus(?=[^a-z0-9]|$)/i },
+  { class: "sonnet", pattern: /(^|[^a-z0-9])sonnet(?=[^a-z0-9]|$)/i },
+  { class: "haiku", pattern: /(^|[^a-z0-9])haiku(?=[^a-z0-9]|$)/i }
+];
+
+function stepDownRouteModelName(value: string): string {
+  // Same last-slash and :: handling as logResolvedRouteModel, plus [1m] tolerance.
+  const stripped = value.trim().replace(/\[1m\]$/i, "");
+  if (!stripped || stripped === "unknown") {
+    return "";
+  }
+  const selectorIndex = stripped.indexOf("::");
+  const routedModel = selectorIndex >= 0 ? stripped.slice(selectorIndex + 2) : stripped;
+  const separator = routedModel.lastIndexOf("/");
+  const model = separator >= 0 ? routedModel.slice(separator + 1) : routedModel;
+  return model || stripped;
+}
+
+function stepDownClassForModel(value: string | undefined): SwapNoticeClass | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const model = stepDownRouteModelName(value);
+  if (!model) {
+    return undefined;
+  }
+  if (model.toLowerCase() === "best") {
+    return "opus";
+  }
+  for (const candidate of stepDownClassPatterns) {
+    if (candidate.pattern.test(model)) {
+      return candidate.class;
+    }
+  }
+  return undefined;
+}
+
+function capitalizeStepDownClass(value: SwapNoticeClass): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function stepDownDetailsForLog(entry: RequestLogEntry): StepDownLogDetails | null {
+  const requestedClass = stepDownClassForModel(entry.requestedModel);
+  const servedClass = stepDownClassForModel(entry.resolvedModel ?? entry.responseModel);
+  if (!requestedClass || !servedClass || stepDownClassRank[servedClass] <= stepDownClassRank[requestedClass]) {
+    return null;
+  }
+  let reason: string | undefined;
+  for (const hop of entry.routeTrace?.hops ?? []) {
+    const hopReason = hop.decision?.reason?.trim();
+    if (hopReason) {
+      reason = hopReason;
+    }
+  }
+  const provider = entry.provider.trim() ? entry.provider : undefined;
+  return {
+    credentialLabel: entry.credentialId?.trim() ? entry.credentialId : undefined,
+    model: logResolvedRouteModel(entry),
+    provider,
+    reason,
+    requestedClass,
+    // The served provider's own Anthropic identity, case-insensitive; an
+    // Anthropic-compatible protocol on another provider still shows the sentence.
+    safeguardsApplies: provider?.trim().toLowerCase() === "anthropic",
+    servedClass
+  };
+}
+
+// Noninteractive fixed-face pill beside the R{n} retry pill. Class names live
+// only in the title tooltip — the face always reads exactly "SD".
+function LogStepDownPill({ details }: { details: StepDownLogDetails }) {
+  const t = useAppText();
+  return (
+    <span
+      className="network-service-paused shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-bold"
+      title={interpolateTemplate(t("Step-down: requested {Requested}, served {Served}"), {
+        Requested: capitalizeStepDownClass(details.requestedClass),
+        Served: capitalizeStepDownClass(details.servedClass)
+      })}
+    >
+      SD
+    </span>
+  );
+}
+
+// One amber detail block per expanded step-down entry, above the existing
+// metric grid. Pairs render only when their value exists.
+function LogStepDownNotice({ details }: { details: StepDownLogDetails }) {
+  const t = useAppText();
+  return (
+    <div className="network-body-warning border-b px-3 py-2 text-[12px]">
+      <div className="font-semibold">{t("Step-down notice")}</div>
+      <div className="mt-2 grid min-w-0 grid-cols-2 gap-y-2 sm:grid-cols-4">
+        <LogMetric label={t("Requested class")} value={capitalizeStepDownClass(details.requestedClass)} wrap />
+        <LogMetric label={t("Served class")} value={capitalizeStepDownClass(details.servedClass)} wrap />
+        <LogMetric label={t("Model")} value={details.model} wrap />
+        {details.credentialLabel ? <LogMetric label={t("Token")} value={details.credentialLabel} wrap /> : null}
+        {details.reason ? <LogMetric label={t("Reason")} value={details.reason} wrap /> : null}
+      </div>
+      {!details.safeguardsApplies ? (
+        <div className="mt-2 break-words">
+          {t("Auto mode will not receive Anthropic safeguards from this non-Anthropic provider.")}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function formatTokenRate(value: number): string {
