@@ -1,7 +1,8 @@
 import { memo } from "react";
 import { requestLogOutcome } from "@ccr/core/contracts/app";
+import { safeguardsAppliesForProvider } from "@ccr/core/class-switch/provider-identity";
 import { Maximize2, Route, X } from "lucide-react";
-import type { RequestRouteTrace, RequestRouteTraceChange, RequestRouteTraceHop, SwapNoticeClass } from "@ccr/core/contracts/app";
+import type { GatewayProviderConfig, RequestRouteTrace, RequestRouteTraceChange, RequestRouteTraceHop, SwapNoticeClass } from "@ccr/core/contracts/app";
 import {
   AnimatedIconSwap, Check, ChevronDown, ChevronLeft,
   ChevronRight, clampNumber, clientInitial, cn, Copy, copyTextToClipboard,
@@ -360,6 +361,7 @@ export function LogsView({
   onEnable,
   onFocusedRequestHandled,
   page,
+  providers,
   refreshLogs,
   updateFilter
 }: {
@@ -371,6 +373,9 @@ export function LogsView({
   onEnable?: () => void;
   onFocusedRequestHandled?: () => void;
   page: RequestLogPage;
+  // The configured provider list resolves the request-log provider display
+  // name back to its provider config for the step-down safeguards identity.
+  providers?: GatewayProviderConfig[];
   refreshLogs: () => void;
   updateFilter: (patch: RequestLogListFilter, resetPage?: boolean) => void;
 }) {
@@ -653,6 +658,7 @@ export function LogsView({
                         item={expandedId === item.id ? detailById[item.id] ?? item : item}
                         key={item.id}
                         onToggle={toggleExpandedLog}
+                        providers={providers}
                       />
                     ))}
                   </div>
@@ -669,6 +675,7 @@ export function LogsView({
                         logTableGridClass={logTableGridClass}
                         logTableGridStyle={logTableGridStyle}
                         onToggle={toggleExpandedLog}
+                        providers={providers}
                       />
                     ))}
                   </div>
@@ -799,7 +806,8 @@ function LogMobileCard({
   hasCredentialInfo,
   index,
   item,
-  onToggle
+  onToggle,
+  providers
 }: {
   detailError?: string;
   detailLoading?: boolean;
@@ -808,12 +816,13 @@ function LogMobileCard({
   index: number;
   item: RequestLogEntry;
   onToggle: (id: number) => void;
+  providers?: GatewayProviderConfig[];
 }) {
   const t = useAppText();
   const numberLocale = useAppNumberLocale();
   const createdAt = useMemo(() => formatLogDateTime(item.createdAt), [item.createdAt]);
   const tokenSummary = useMemo(() => formatLogTokenSummary(item, t, numberLocale), [item, numberLocale, t]);
-  const stepDownDetails = stepDownDetailsForLog(item);
+  const stepDownDetails = stepDownDetailsForLog(item, providers);
 
   return (
     <div className={cn("network-row rounded-md border text-[12px]", expanded && "network-row-selected")}>
@@ -866,7 +875,7 @@ function LogMobileCard({
           </div>
         </div>
       </button>
-      {expanded ? <LogExpandedDetails detailError={detailError} detailLoading={detailLoading} entry={item} /> : null}
+      {expanded ? <LogExpandedDetails detailError={detailError} detailLoading={detailLoading} entry={item} providers={providers} /> : null}
     </div>
   );
 }
@@ -889,7 +898,8 @@ const LogRow = memo(function LogRow({
   item,
   logTableGridClass,
   logTableGridStyle,
-  onToggle
+  onToggle,
+  providers
 }: {
   detailError?: string;
   detailLoading?: boolean;
@@ -900,12 +910,13 @@ const LogRow = memo(function LogRow({
   logTableGridClass: string;
   logTableGridStyle?: LogTableGridStyle;
   onToggle: (id: number) => void;
+  providers?: GatewayProviderConfig[];
 }) {
   const t = useAppText();
   const numberLocale = useAppNumberLocale();
   const createdAt = useMemo(() => formatLogDateTime(item.createdAt), [item.createdAt]);
   const tokenSummary = useMemo(() => formatLogTokenSummary(item, t, numberLocale), [item, numberLocale, t]);
-  const stepDownDetails = stepDownDetailsForLog(item);
+  const stepDownDetails = stepDownDetailsForLog(item, providers);
 
   return (
     <div>
@@ -944,7 +955,7 @@ const LogRow = memo(function LogRow({
         <div className="network-row-secondary truncate px-2" title={tokenSummary}>{tokenSummary}</div>
         <div className="network-row-secondary truncate px-2">{formatDuration(item.durationMs)}</div>
       </button>
-      {expanded ? <LogExpandedDetails detailError={detailError} detailLoading={detailLoading} entry={item} /> : null}
+      {expanded ? <LogExpandedDetails detailError={detailError} detailLoading={detailLoading} entry={item} providers={providers} /> : null}
     </div>
   );
 });
@@ -952,16 +963,18 @@ const LogRow = memo(function LogRow({
 export function LogExpandedDetails({
   detailError,
   detailLoading,
-  entry
+  entry,
+  providers
 }: {
   detailError?: string;
   detailLoading?: boolean;
   entry: RequestLogEntry;
+  providers?: GatewayProviderConfig[];
 }) {
   const t = useAppText();
   const numberLocale = useAppNumberLocale();
   const hasCredentialInfo = logHasCredentialInfo(entry);
-  const stepDownDetails = stepDownDetailsForLog(entry);
+  const stepDownDetails = stepDownDetailsForLog(entry, providers);
 
   return (
     <div className="network-detail border-b">
@@ -1573,7 +1586,7 @@ function capitalizeStepDownClass(value: SwapNoticeClass): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function stepDownDetailsForLog(entry: RequestLogEntry): StepDownLogDetails | null {
+function stepDownDetailsForLog(entry: RequestLogEntry, providers?: GatewayProviderConfig[]): StepDownLogDetails | null {
   const requestedClass = stepDownClassForModel(entry.requestedModel);
   const servedClass = stepDownClassForModel(entry.resolvedModel ?? entry.responseModel);
   if (!requestedClass || !servedClass || stepDownClassRank[servedClass] <= stepDownClassRank[requestedClass]) {
@@ -1587,15 +1600,20 @@ function stepDownDetailsForLog(entry: RequestLogEntry): StepDownLogDetails | nul
     }
   }
   const provider = entry.provider.trim() ? entry.provider : undefined;
+  // Resolve the request-log provider display name back to its configured
+  // provider and apply the same Anthropic-identity predicate core applies to
+  // the notice, so the log cannot disagree with the banner. The display-name
+  // text itself never decides this (an "AnthropicShim" display name with
+  // provider "anthropic" is Anthropic; a borrowed anthropic_messages protocol
+  // on a non-Anthropic provider is not).
+  const providerConfig = providers?.find((candidate) => candidate.name === entry.provider);
   return {
     credentialLabel: entry.credentialId?.trim() ? entry.credentialId : undefined,
     model: logResolvedRouteModel(entry),
     provider,
     reason,
     requestedClass,
-    // The served provider's own Anthropic identity, case-insensitive; an
-    // Anthropic-compatible protocol on another provider still shows the sentence.
-    safeguardsApplies: provider?.trim().toLowerCase() === "anthropic",
+    safeguardsApplies: providerConfig ? safeguardsAppliesForProvider(providerConfig) : false,
     servedClass
   };
 }

@@ -3285,6 +3285,7 @@ function App() {
                   onEnable: () => changeObservabilityConfig({ requestLogs: true }),
                   onFocusedRequestHandled: () => setFocusedRequestLogId(undefined),
                   page: requestLogPage,
+                  providers: draftConfig.Providers,
                   refreshLogs: () => void refreshRequestLogs(),
                   updateFilter: updateRequestLogFilter
                 },

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { AgentAnalysisSessionRow, AgentAnalysisTraceRun, RequestLogEntry, RequestLogPage, RequestRouteTrace } from "@ccr/core/contracts/app.ts";
+import type { AgentAnalysisSessionRow, AgentAnalysisTraceRun, GatewayProviderConfig, RequestLogEntry, RequestLogPage, RequestRouteTrace } from "@ccr/core/contracts/app.ts";
 import { AgentAnalysisView } from "@ccr/ui/pages/home/components/dashboard.tsx";
 import { LogExpandedDetails, LogsView } from "@ccr/ui/pages/home/components/network-logs.tsx";
 import { AppI18nContext, appCopy } from "@ccr/ui/pages/home/shared/i18n.tsx";
@@ -502,7 +502,7 @@ const incompleteLogEntry: RequestLogEntry = {
   responseModel: "claude-sonnet-4"
 };
 
-function logsViewMarkup(items: RequestLogEntry[]): string {
+function logsViewMarkup(items: RequestLogEntry[], providers?: GatewayProviderConfig[]): string {
   return renderToStaticMarkup(
     <AppI18nContext.Provider value={appCopy.en}>
       <LogsView
@@ -510,6 +510,7 @@ function logsViewMarkup(items: RequestLogEntry[]): string {
         filter={{ page: 1, pageSize: 25, status: "all" }}
         loading={false}
         page={{ ...emptyLogPage, items, total: items.length }}
+        providers={providers}
         refreshLogs={() => undefined}
         updateFilter={() => undefined}
       />
@@ -517,10 +518,10 @@ function logsViewMarkup(items: RequestLogEntry[]): string {
   );
 }
 
-function expandedDetailsMarkup(entry: RequestLogEntry, language: "en" | "zh" = "en"): string {
+function expandedDetailsMarkup(entry: RequestLogEntry, language: "en" | "zh" = "en", providers?: GatewayProviderConfig[]): string {
   return renderToStaticMarkup(
     <AppI18nContext.Provider value={language === "zh" ? appCopy.zh : appCopy.en}>
-      <LogExpandedDetails entry={entry} />
+      <LogExpandedDetails entry={entry} providers={providers} />
     </AppI18nContext.Provider>
   );
 }
@@ -577,6 +578,45 @@ test("SD pills only mark strict lower-class step-down rows", () => {
   assert.equal((twoRowsHtml.match(/>SD</g) ?? []).length, 4);
 });
 
+// The safeguards sentence follows the provider's own Anthropic identity (the
+// shared core predicate), never the display name: an "AnthropicShim" display
+// name with provider "anthropic" is Anthropic, while a borrowed
+// anthropic_messages protocol on a non-Anthropic provider is not.
+const providerFixtures: GatewayProviderConfig[] = [
+  { models: ["claude-sonnet-4"], name: "OpenRouter" },
+  { models: ["sonnet-live"], name: "AnthropicShim", provider: "anthropic" },
+  { models: ["sonnet-live"], name: "BorrowedAnthropic", provider: "openai", type: "anthropic_messages" },
+  { models: ["sonnet-live"], name: "ExplicitType", type: "anthropic" }
+];
+
+test("safeguards follow the configured provider identity, not the display name", () => {
+  const shimEntry = { ...stepDownRequestLogEntry, provider: "AnthropicShim" };
+  const shimHtml = expandedDetailsMarkup(shimEntry, "en", providerFixtures);
+  assert.doesNotMatch(shimHtml, /safeguards from this non-Anthropic provider/);
+
+  // The explicit-type fallback counts as Anthropic only when the `provider`
+  // field is absent.
+  const explicitTypeHtml = expandedDetailsMarkup(
+    { ...stepDownRequestLogEntry, provider: "ExplicitType" },
+    "en",
+    providerFixtures
+  );
+  assert.doesNotMatch(explicitTypeHtml, /safeguards from this non-Anthropic provider/);
+
+  // A borrowed anthropic_messages protocol on a non-Anthropic provider keeps
+  // the sentence.
+  const borrowedHtml = expandedDetailsMarkup(
+    { ...stepDownRequestLogEntry, provider: "BorrowedAnthropic" },
+    "en",
+    providerFixtures
+  );
+  assert.match(borrowedHtml, /Auto mode will not receive Anthropic safeguards from this non-Anthropic provider\./);
+
+  // An unresolved display name stays conservative and shows the sentence.
+  const unresolvedHtml = expandedDetailsMarkup({ ...stepDownRequestLogEntry, provider: "GhostProvider" }, "en", providerFixtures);
+  assert.match(unresolvedHtml, /Auto mode will not receive Anthropic safeguards from this non-Anthropic provider\./);
+});
+
 test("SD pill face stays fixed while long model ids live in the title tooltip", () => {
   const longIdEntry: RequestLogEntry = {
     ...stepDownRequestLogEntry,
@@ -608,8 +648,13 @@ test("expanded step-down details render available pairs and omit missing ones", 
   assert.doesNotMatch(noCredentialHtml, /Token/);
   assert.match(noCredentialHtml, /font-mono[^>]*>claude-sonnet-4</);
 
-  // Anthropic served provider hides the safeguards sentence.
-  const anthropicHtml = expandedDetailsMarkup({ ...stepDownRequestLogEntry, provider: "anthropic" });
+  // Anthropic served provider hides the safeguards sentence — resolved from
+  // the configured provider identity, not the display-name text alone.
+  const anthropicHtml = expandedDetailsMarkup(
+    { ...stepDownRequestLogEntry, provider: "anthropic" },
+    "en",
+    [{ models: ["claude-sonnet-4"], name: "anthropic", provider: "anthropic" }]
+  );
   assert.doesNotMatch(anthropicHtml, /safeguards from this non-Anthropic provider/);
 
   // Same-class and incomplete entries render no step-down block at all.
