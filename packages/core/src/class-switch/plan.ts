@@ -2,7 +2,8 @@ import { benchSortSignals, isBenched } from "@ccr/core/class-switch/bench";
 import {
   readShelfSnapshot,
   type ShelfClass,
-  type ShelfRow
+  type ShelfRow,
+  type ShelfSnapshot
 } from "@ccr/core/class-switch/catalog";
 import {
   decodeClaudeAppGatewayRouteId,
@@ -356,6 +357,31 @@ function filteredShelfRows(
     .sort(compareShelfRows);
 }
 
+// The one snapshot-based target-to-shelf mapping, shared by the step-down
+// planner path and the sticky tool-turn path so both store the shelf the
+// target's provider/model pair actually lives in. The sticky target is
+// resolved from a remembered triple, so its shelf must come from the snapshot
+// — never from the current request's requested class. Rows are unique per
+// (provider, model) pair, so the first hit is the row's own shelf; an unknown
+// target yields undefined and no class is invented.
+function shelfClassInSnapshot(snapshot: ShelfSnapshot, target: RouteModelRef | undefined): ShelfClass | undefined {
+  if (target?.kind !== "provider") {
+    return undefined;
+  }
+  const providerName = target.provider.name?.trim() ?? "";
+  const model = target.model.trim();
+  if (!providerName || !model) {
+    return undefined;
+  }
+  for (const shelfClass of SHELF_CLASS_RANK) {
+    const rows = snapshot.shelves[shelfClass];
+    if (rows.some((row) => row.provider === providerName && row.model === model)) {
+      return shelfClass;
+    }
+  }
+  return undefined;
+}
+
 function toolTurnAttempt(
   parsed: ParsedClassRequest,
   modelRegistry: ModelRegistry | undefined,
@@ -447,9 +473,17 @@ export function attemptsForStepDown(
     const sticky = toolTurnAttempt(parsed, modelRegistry, sessionId);
     if (sticky) {
       thinShareCounter += 1;
+      // The remembered triple is the previously served provider/model/credential.
+      // Its shelf comes from where that pair lives in the current snapshot — the
+      // requested class of THIS request would mislabel a lower-class served
+      // response as same-class and erase the step-down notice and headers.
+      const snapshot = readShelfSnapshot();
       for (const attempt of sticky) {
         if (attempt.target) {
-          targetShelfByReference.set(attempt.target, parsed.shelfClass);
+          const servedClass = snapshot ? shelfClassInSnapshot(snapshot, attempt.target) : undefined;
+          if (servedClass) {
+            targetShelfByReference.set(attempt.target, servedClass);
+          }
         }
       }
       return sticky;
@@ -474,7 +508,9 @@ export function attemptsForStepDown(
     for (const attempt of buildAttempts(ordered, modelRegistry)) {
       attempts.push({ ...attempt, index: attempts.length });
       if (attempt.target) {
-        targetShelfByReference.set(attempt.target, shelfClass);
+        // The shared snapshot mapping decides the shelf; the walked shelf is
+        // only the direct fallback for a row the snapshot lookup cannot find.
+        targetShelfByReference.set(attempt.target, shelfClassInSnapshot(snapshot, attempt.target) ?? shelfClass);
       }
     }
   }

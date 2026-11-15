@@ -258,7 +258,9 @@ async function runStepDownPipeline(requestModel, options = {}) {
   try {
     const request = Readable.from([JSON.stringify({
       max_tokens: 64,
-      messages: [{ content: REQUEST_MARKER, role: "user" }],
+      messages: options.toolResultTurn
+        ? [{ content: [{ content: "ok", type: "tool_result" }], role: "user" }]
+        : [{ content: REQUEST_MARKER, role: "user" }],
       model: requestModel,
       stream: true
     })]);
@@ -492,6 +494,44 @@ test("an all-empty shelf set errors the request without a provider success", asy
     // walk must never start when every class is empty.
     assert.equal(result.fetchCalls.some((call) => call.url.endsWith("/v1/messages")), false);
   });
+});
+
+test("a tool turn served by the remembered triple keeps the step-down notice", async () => {
+  await withStepDownGateway(
+    shelf({ sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }] }),
+    async () => {
+      const sessionId = "sess-tool-turn";
+      // First request: an Opus class request served by the Sonnet row with a
+      // session id, so the executor remembers the served triple.
+      const first = await runStepDownPipeline(REQUESTED_MODEL, {
+        requestHeaders: { "x-claude-code-session-id": sessionId }
+      });
+      assert.equal(first.failure, undefined);
+      assert.equal(first.response.statusCode, 200);
+      assert.equal(first.response.headers["x-ccr-requested-model"], REQUESTED_MODEL);
+      assert.equal(first.response.headers["x-ccr-served-model"], SERVED_MODEL);
+
+      // Second request: a tool-result-only turn reuses the remembered Sonnet
+      // triple. The served shelf comes from the snapshot, so the response must
+      // still carry both headers and the Opus-to-Sonnet notice.
+      const second = await runStepDownPipeline(REQUESTED_MODEL, {
+        requestHeaders: { "x-claude-code-session-id": sessionId },
+        toolResultTurn: true
+      });
+      assert.equal(second.failure, undefined);
+      assert.equal(second.upstreamBody?.model, "sonnet-live");
+      assert.equal(second.response.statusCode, 200);
+      assert.equal(second.response.headers["x-ccr-requested-model"], REQUESTED_MODEL);
+      assert.equal(second.response.headers["x-ccr-served-model"], SERVED_MODEL);
+
+      const notice = await getSwapNotice({ modelRegistry: sonnetRegistry() });
+      assert.ok(notice);
+      assert.equal(notice.requestedClass, "opus");
+      assert.equal(notice.servedClass, "sonnet");
+      assert.equal(notice.model, "sonnet-live");
+      assert.equal(notice.provider, "SonnetProvider");
+    }
+  );
 });
 
 // ---------------------------------------------------------------------------
