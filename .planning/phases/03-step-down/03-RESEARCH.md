@@ -349,22 +349,22 @@ No missing dependency blocks the phase. [VERIFIED: environment probe; package sc
 | A7 | [ASSUMED] A UI test can restore a live triple while `getSwapNotice()` still returns the previous record if the recovery predicate is not run. | Pitfall 3 | Recovery bugs may not be caught by tests that only exercise route planning. |
 | A8 | [ASSUMED] Class-level shelf/credential/bench liveness is the correct recovery predicate for a persistent notice. | Open Question 2 | Request-specific capability differences could make the notice clear too early or too late. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **What exact model strings go in the two headers?**
    - What we know: The requirement names `x-ccr-requested-model` and `x-ccr-served-model`; the response body must retain Claude's requested model name. [VERIFIED: .planning/REQUIREMENTS.md:35-36]
-   - What's unclear: Whether `x-ccr-served-model` contains the provider-qualified route selector or a Claude class/model alias.
-   - Recommendation: Use original request model and the final selected route model, respectively, and test that the two headers are set together. Confirm the exact values against the project's header convention before locking the plan. [ASSUMED]
+   - What was unclear: Whether `x-ccr-served-model` contains the provider-qualified route selector or a Claude class/model alias.
+   - Resolution: RESOLVED: `x-ccr-requested-model` carries the exact original Claude request model string, and `x-ccr-served-model` carries the final provider-qualified route model string. The headers are set together only after an actual lower-class 2xx, as locked by `03-01-PLAN.md`'s response-identity/header must-haves and GREEN `pipeline.ts` action.
 
 2. **What is the precise “live again” predicate?**
    - What we know: The notice clears when the requested higher class has a live triple again. The existing plan filters credentials, bench state, tool/image support, and context length. [VERIFIED: .planning/REQUIREMENTS.md:36; packages/core/src/class-switch/plan.ts:113-159, 356-399]
-   - What's unclear: Whether notice recovery checks any class-level live triple or one eligible for the request that created the notice.
-   - Recommendation: Use class-level shelf/credential/bench liveness for clearing the persistent notice, and reconcile during notice reads and relevant class-switch state updates. Mark this predicate in tests. [ASSUMED]
+   - What was unclear: Whether notice recovery checks any class-level live triple or one eligible for the request that created the notice.
+   - Resolution: RESOLVED: recovery uses the class-level shelf/credential/bench predicate `hasLiveTripleForClass` for the saved requested class, not request-specific tool, image, token, or one-million-window eligibility. `readSwapNotice` reconciles through that predicate and clears the record when the class is live, as locked by `03-01-PLAN.md`'s live-again must-haves and GREEN planner/notice actions.
 
 3. **How should simultaneous swaps share the single notice?**
    - What we know: The UI data contract describes one current swap record. [VERIFIED: .planning/phases/03-step-down/03-UI-SPEC.md:90]
-   - What's unclear: The replacement/priority rule if requests for different classes step down concurrently.
-   - Recommendation: Record the most recent successful swap and make the behavior deterministic. [ASSUMED]
+   - What was unclear: The replacement/priority rule if requests for different classes step down concurrently.
+   - Resolution: RESOLVED: the latest successful swap holding wins. Each actual lower-class success replaces the singleton through `recordSwapNotice`, while per-request log rows retain their own routing truth, as locked by `03-01-PLAN.md`'s latest-swap must-have and GREEN notice action.
 
 ## Sources
 
