@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.0
 current_phase: 3
 current_phase_name: Step-down
-status: planning
-stopped_at: Phase 2 complete, ready to plan Phase 3
-last_updated: "2026-11-15T06:27:54.567Z"
+current_plan: 2
+status: executing
+stopped_at: Completed 03-01-PLAN.md (step-down core); 03-02 next
+last_updated: "2026-11-15T09:43:30.921Z"
 last_activity: 2026-11-15
-last_activity_desc: Phase 2 complete, transitioned to Phase 3
-state_head: 220020e7a31e95d996d4a2b6a92f915b9a98f6ba
+last_activity_desc: 03-01 executed (RED+GREEN) with summary; 03-02 next
+state_head: ebba9c96281232ae1d01a7876c0ee82adc4e1b52
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 7
-  percent: 67
+  total_plans: 10
+  completed_plans: 8
 milestone_name: Automatic class switch
 ---
 
@@ -30,16 +30,17 @@ See: .planning/PROJECT.md (updated 2026-11-15)
 ## Current Position
 
 Phase: 3 — Step-down
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-11-15 — Phase 2 complete, transitioned to Phase 3
+Current Plan: 2
+Total Plans in Phase: 3
+Status: Ready to execute
+Last activity: 2026-11-15 — 03-01 executed (RED+GREEN), summary written
 
 Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -49,7 +50,7 @@ Progress: [███████░░░] 67%
 |-------|-------|-------|----------|
 | 1. Shelves | 2 | 3 | 18min |
 | 2. Live choice | 0 | 4 | — |
-| 3. Step-down | 0 | TBD | — |
+| 3. Step-down | 1 | 1 | 45min |
 | 1 | 3 | - | - |
 | 2 | 4 | - | - |
 
@@ -68,6 +69,7 @@ Progress: [███████░░░] 67%
 | Phase 02-live-choice P01 | 25min | 2 tasks | 5 files |
 | Phase 02-live-choice P02 | 45min | 2 tasks | 4 files |
 | Phase 02-live-choice P03 | 70min | 2 tasks | 5 files |
+| Phase 3 P01 | 45min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -90,6 +92,8 @@ Recent decisions affecting current work:
 - [Phase 02-live-choice]: Bench probe timer is separate from catalog walk; connectivity mode with one model id
 - [Phase 02-live-choice]: Thin-share counter increments once per returned list including single-row tool turns
 - [Phase 02-live-choice]: Providers without credentials still emit one shelf attempt per model
+- [Phase 3]: Ordered append step-down: requested rows first, lower classes appended so refusals fall through; full exhaustion returns attempts []
+- [Phase 3]: Notice recovery is class-level shelf/credential/bench liveness; safeguardsApplies keys on the provider's own anthropic identity
 
 ### Pending Todos
 
@@ -115,7 +119,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T01:20:00Z
-Stopped at: Phase 2 complete and verified; Phase 3 (Step-down) next — not started
+Last session: 2026-11-15T09:43:30.764Z
+Stopped at: Completed 03-01-PLAN.md (step-down core); 03-02 next
 Resume file: None
-Phase 3 plans: none yet. Phases 1-2 verified and complete.
+Phase 3: 03-01 complete (ordered step-down, notice, headers — see 03-01-SUMMARY.md). 03-02 and 03-03 remain. Phases 1-2 verified and complete.

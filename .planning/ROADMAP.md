@@ -74,12 +74,12 @@ Plans:
   1. User requests a class with no live triple and still gets a normal Claude success from the next lower class (Fable, then Opus, then Sonnet, then Haiku). One live model in the requested class wins over every model below it. The response body still uses the model name Claude sent.
   2. User sees one notice while a swap holds, in the request log and in the management UI: requested class, served class, model, token, the reason, and that auto mode will not receive Anthropic `safeguards` from a non-Anthropic provider. The notice goes away when the higher class has a live triple again. Headers `x-ccr-requested-model` and `x-ccr-served-model` carry the two names.
   3. User receives an error from Claude only when all four classes have no live triple. A live model on a lower class does not surface as "All target providers failed".
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 **UI hint**: yes
 
 Plans:
 **Wave 1**
-- [ ] 03-01-PLAN.md — Serve lower-class Claude success and record the swap
+- [x] 03-01-PLAN.md — Serve lower-class Claude success and record the swap
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 03-02-PLAN.md — Expose the swap notice through desktop IPC and authenticated web RPC
@@ -96,4 +96,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Shelves | 3/3 | Complete    | 2026-11-15 |
 | 2. Live choice | 4/4 | Complete    | 2026-11-15 |
-| 3. Step-down | 0/3 | Not started | - |
+| 3. Step-down | 1/3 | In Progress | - |
