@@ -64,3 +64,19 @@ verified but are OUT OF SCOPE for the 4-failure fix wave — do not fix them her
   skip unless `CCR_TEST_GATEWAY_ENTRY` points at the gateway production entry.
   Pre-existing behavior; the 10 skipped tests in the core run are these plus
   similar opt-in gates.
+
+## §4 — Wave-2 gate finding: build regenerates the tracked models.json from live sources (2026-11-15)
+
+`build/build.mjs` line 1 imports `scripts/generate-models-json.mjs`, so every run of the root
+`build` script (and `build/docker-build.mjs`) regenerates `packages/core/models.json` from LIVE
+litellm/models.dev sources. The file is git-tracked and the catalog tests assert against HEAD's
+snapshot, so any build run leaves uncommitted drift that fails codex-model-catalog,
+openrouter-compatibility (#1779 aggregate source), and provider-probe (NVIDIA source record)
+tests until `git checkout HEAD -- packages/core/models.json`.
+
+- Occurrences in this phase: 2026-11-15T09:45 (wave-1 window) and 10:27 (orchestrator wave-2 build gate), both restored to HEAD.
+- Mitigation used during this phase: the post-merge BUILD gate runs `node build/build.mjs` NO MORE —
+  the full TEST gate (npm run test:packages && npm run test:architecture) compiles everything it needs
+  and is the authoritative gate; models.json is restored to HEAD and left untouched.
+- Proper fix belongs to the repo design (upstream): generate to a gitignored path or stop importing
+  the generator from build.mjs; left for the milestone audit as tech debt.
