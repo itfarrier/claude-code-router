@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: v1.0
 current_phase: 3
-current_phase_name: Step-down
-current_plan: 3
-status: verifying
-stopped_at: Completed 03-04-PLAN.md (class-switch reason gap closure); phase 3 complete, check 49 closed
-last_updated: "2026-11-15T13:00:12.624Z"
+current_plan: Not started
+status: completed
+stopped_at: Phase 3 complete — all phases complete
+last_updated: "2026-11-15T13:32:51.404Z"
 last_activity: 2026-11-15
-last_activity_desc: 03-01 executed (RED+GREEN) with summary; 03-02 next
-state_head: 2ce9674f94a44b284bdcbfeb8652b6bf8c3c4e1e
+last_activity_desc: Phase 3 complete
+state_head: 015ec0880ccd66c4ae2069e16c0d606277d01ec5
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
   completed_plans: 11
+  percent: 100
 milestone_name: Automatic class switch
 ---
 
@@ -25,34 +25,32 @@ milestone_name: Automatic class switch
 See: .planning/PROJECT.md (updated 2026-11-15)
 
 **Core value:** Claude Code orders a class. CCR serves the strongest live model in that class, and Claude does not fail when that class is empty.
-**Current focus:** Phase 03 — Step-down
+**Current focus:** Milestone v1.0 complete — closing out (final phase-1 verification refresh, milestone audit → complete → cleanup)
 
 ## Current Position
 
-Phase: 3 — Step-down
-Current Plan: 3
-Total Plans in Phase: 3
-Status: Phase complete — ready for verification
-Last activity: 2026-11-15 — 03-03 executed (RED+GREEN), phase 3 summaries complete
+Phase: 3
+Current Plan: Not started
+Total Plans in Phase: 4
+Status: All phases complete
+Last activity: 2026-11-15 — Phase 3 complete
 
 Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
-- Average duration: —
-- Total execution time: 0 hours
+- Total plans completed: 11
+- Average duration: ~40min
+- Total execution time: ~7.3 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1. Shelves | 2 | 3 | 18min |
-| 2. Live choice | 0 | 4 | — |
-| 3. Step-down | 1 | 1 | 45min |
-| 1 | 3 | - | - |
-| 2 | 4 | - | - |
+| 1. Shelves | 3 | 82min | 27min |
+| 2. Live choice | 4 | 230min | 58min |
+| 3. Step-down | 4 | 127min | 32min |
 
 **Recent Trend:**
 - Last 5 plans: —
@@ -69,10 +67,10 @@ Progress: [██████████] 100%
 | Phase 02-live-choice P01 | 25min | 2 tasks | 5 files |
 | Phase 02-live-choice P02 | 45min | 2 tasks | 4 files |
 | Phase 02-live-choice P03 | 70min | 2 tasks | 5 files |
+| Phase 02-live-choice P04 | 90min | 2 tasks | 4 files |
 | Phase 3 P01 | 45min | 2 tasks | 9 files |
 | Phase 3 P02 | 45min | 3 tasks | 10 files |
 | Phase 3 P03 | 25min | 3 tasks | 7 files |
-| Phase 3 P3 | 25min | 3 tasks | 7 files |
 | Phase 3 P04 | 12min | 2 tasks | 6 files |
 
 ## Accumulated Context
@@ -114,7 +112,7 @@ None yet.
 
 ### Blockers/Concerns
 
-Resolved 2026-11-15: Phase 1 + Phase 2 both verified and complete. Phase 2's 6 critical + 5 warning review findings were fixed by the converged --auto fix loop (13 fixes, final review clean); 2 loop-introduced warnings (WR-06, WR-07) fixed and re-verified. Accepted code-review deferrals remain recorded: 01-REVIEW-DISPOSITION.md (WR-04, IN-01 — open) and 02-REVIEW-DISPOSITION.md (IN-01 — skipped, info); carried to milestone audit.
+Resolved 2026-11-15: all three phases verified and complete. Phase 3's deep review (5 critical + 5 warning) was fixed in one iteration (10 atomic fix commits) with the single verification gap closed by plan 03-04 (real routeTrace reason capture) — final suite green. Accepted code-review deferrals remain recorded for the milestone audit: 01-REVIEW-DISPOSITION.md (WR-04, IN-01 — open), 02-REVIEW-DISPOSITION.md (IN-01 — skipped, info), 03-REVIEW-DISPOSITION.md (IN-01 — skipped as out of scope, subsumed by the WR-05 DTO rebuild).
 
 ## Deferred Verification
 
@@ -132,7 +130,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T12:59:59.923Z
-Stopped at: Completed 03-04-PLAN.md (class-switch reason gap closure); phase 3 complete, check 49 closed
+Last session: 2026-11-15
+Stopped at: Phase 3 complete — all 3 phases complete; ready for milestone audit and completion
 Resume file: None
-Phase 3: 03-01, 03-02, and 03-03 all complete with summaries written; ready for phase verification. Phases 1-2 verified and complete.
+Phases 1-3 all verified (verification passed after delegated human-item sign-offs), secured (0 open threats each), and complete. Next: final phase-1 verification refresh (covered files changed in phases 2-3), then /gsd-audit-milestone → /gsd-complete-milestone → /gsd-cleanup.
