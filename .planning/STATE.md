@@ -3,18 +3,18 @@ gsd_state_version: "1.0"
 milestone: v1.0
 current_phase: 3
 current_phase_name: Step-down
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed 03-01-PLAN.md (step-down core); 03-02 next
-last_updated: "2026-11-15T09:43:30.921Z"
+stopped_at: Completed 03-02-PLAN.md (notice transports); 03-03 next
+last_updated: "2026-11-15T10:26:40.931Z"
 last_activity: 2026-11-15
 last_activity_desc: 03-01 executed (RED+GREEN) with summary; 03-02 next
-state_head: ebba9c96281232ae1d01a7876c0ee82adc4e1b52
+state_head: 8fae4fe2ed108cf0e29974f3d4ddafc5eb8c7b8d
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
 milestone_name: Automatic class switch
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-15)
 ## Current Position
 
 Phase: 3 — Step-down
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 3
 Status: Ready to execute
 Last activity: 2026-11-15 — 03-01 executed (RED+GREEN), summary written
@@ -70,6 +70,7 @@ Progress: [███████░░░] 67%
 | Phase 02-live-choice P02 | 45min | 2 tasks | 4 files |
 | Phase 02-live-choice P03 | 70min | 2 tasks | 5 files |
 | Phase 3 P01 | 45min | 2 tasks | 9 files |
+| Phase 3 P02 | 45min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,8 @@ Recent decisions affecting current work:
 - [Phase 02-live-choice]: Providers without credentials still emit one shelf attempt per model
 - [Phase 3]: Ordered append step-down: requested rows first, lower classes appended so refusals fall through; full exhaustion returns attempts []
 - [Phase 3]: Notice recovery is class-level shelf/credential/bench liveness; safeguardsApplies keys on the provider's own anthropic identity
+- [Phase 3]: One seam read, three transports: management RPC, Electron ipcMain.handle(appGetSwapNotice), and preload/Window.ccr/browser bridge all expose identical zero-argument getSwapNotice(); no new route, write API, or state store
+- [Phase 3]: 03-02 leaves npm run typecheck red by boundary: 14 errors pre-exist at b11f731b; 11 are in locked parent files (executor.ts, execution-plan.ts) FORK-SEAMS forbids editing beyond seam calls — recorded in deferred-items §3 and WINDOWS ledger; plan-touched files contribute zero typecheck errors
 
 ### Pending Todos
 
@@ -119,7 +122,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T09:43:30.764Z
-Stopped at: Completed 03-01-PLAN.md (step-down core); 03-02 next
+Last session: 2026-11-15T10:26:40.784Z
+Stopped at: Completed 03-02-PLAN.md (notice transports); 03-03 next
 Resume file: None
 Phase 3: 03-01 complete (ordered step-down, notice, headers — see 03-01-SUMMARY.md). 03-02 and 03-03 remain. Phases 1-2 verified and complete.
