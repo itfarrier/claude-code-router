@@ -72,6 +72,7 @@ test("web bridge reads getSwapNotice with no arguments", async () => {
       endpoint: url,
       headers: { ...(init?.headers ?? {}) }
     });
+
     return new Response(JSON.stringify({ ok: true, value: swapNotice }), {
       headers: { "content-type": "application/json" },
       status: 200
@@ -82,7 +83,7 @@ test("web bridge reads getSwapNotice with no arguments", async () => {
   const populated = await bridge().getSwapNotice();
 
   assert.equal(requests.length, 1);
-  assert.equal(new URL(requests[0].endpoint).pathname, "/api/ccr/rpc");
+  assert.equal(requests[0].endpoint, "/api/ccr/rpc");
   assert.equal(requests[0].headers["content-type"], "application/json");
   assert.deepEqual(JSON.parse(requests[0].body), { args: [], method: "getSwapNotice" });
   assert.deepEqual(populated, swapNotice);
