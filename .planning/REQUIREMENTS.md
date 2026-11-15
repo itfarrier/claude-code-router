@@ -32,9 +32,9 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 
 ### Step-down
 
-- [ ] **FALL-01**: User can request a class with no live triple and still get a normal Claude success from the next lower class (Fable, then Opus, then Sonnet, then Haiku). One live model in the requested class wins over every model below it. The response body still uses the model name Claude sent.
-- [ ] **FALL-02**: User can see one notice while a swap holds, in the request log and in the management UI: requested class, served class, model, token, the reason, and that auto mode will not receive Anthropic `safeguards` from a non-Anthropic provider (parent issue #1932). The notice goes away when the higher class has a live triple again. Headers `x-ccr-requested-model` and `x-ccr-served-model` carry the two names.
-- [ ] **FALL-03**: User receives an error from Claude only when all four classes have no live triple. A live model on a lower class must not surface as "All target providers failed" (parent discussion #1907).
+- [x] **FALL-01**: User can request a class with no live triple and still get a normal Claude success from the next lower class (Fable, then Opus, then Sonnet, then Haiku). One live model in the requested class wins over every model below it. The response body still uses the model name Claude sent.
+- [x] **FALL-02**: User can see one notice while a swap holds, in the request log and in the management UI: requested class, served class, model, token, the reason, and that auto mode will not receive Anthropic `safeguards` from a non-Anthropic provider (parent issue #1932). The notice goes away when the higher class has a live triple again. Headers `x-ccr-requested-model` and `x-ccr-served-model` carry the two names.
+- [x] **FALL-03**: User receives an error from Claude only when all four classes have no live triple. A live model on a lower class must not surface as "All target providers failed" (parent discussion #1907).
 
 ### Safety
 
@@ -72,9 +72,9 @@ Implementation placement is locked in `.planning/research/FORK-SEAMS.md`. New co
 | BENCH-02 | Phase 2 | Complete |
 | BACK-01 | Phase 1 | Complete |
 | BACK-02 | Phase 2 | Complete |
-| FALL-01 | Phase 3 | Pending |
-| FALL-02 | Phase 3 | Pending |
-| FALL-03 | Phase 3 | Pending |
+| FALL-01 | Phase 3 | Complete |
+| FALL-02 | Phase 3 | Complete |
+| FALL-03 | Phase 3 | Complete |
 | SAFE-01 | Phase 2 | Complete |
 | SAFE-02 | Phase 2 | Complete |
 
