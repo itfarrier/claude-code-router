@@ -1,9 +1,9 @@
 ---
 phase: "2"
 slug: "live-choice"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: validated
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-11-14"
 ---
 
@@ -38,13 +38,13 @@ created: "2026-11-14"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| pending | 02 | 0 | CHOICE-01 | — | Highest live score wins. An image inside tool_result counts as an image. A short window is dropped. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 02 | 0 | CHOICE-02 | — | One credential per class attempt. A 429 tries the next row. A 400 stops and parks nobody. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 02 | 0 | BENCH-01 | T-2 input | Park time comes from the provider clock. A 400 writes no bench row. A message string is not a clock. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 02 | 0 | BENCH-02 | — | Quota comes from the response. No free-tier requests-per-minute table exists. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 02 | 0 | BACK-02 | — | A model with no fresh time is probed in 1–2 minutes. A named time is the next probe. A large remaining quota skips the probe. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 02 | 0 | SAFE-01 | T-2 input | The policy receives the model name, tool names, and image flag. It does not receive the message body. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
-| pending | 02 | 0 | SAFE-02 | T-2 key | A failed leg is logged without the API key. The success card counts the user request. | unit | `npm run test:unit -w @claude-code-router/core` | ❌ W0 | ⬜ pending |
+| pending | 02 | 0 | CHOICE-01 | — | Highest live score wins. An image inside tool_result counts as an image. A short window is dropped. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 02 | 0 | CHOICE-02 | — | One credential per class attempt. A 429 tries the next row. A 400 stops and parks nobody. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 02 | 0 | BENCH-01 | T-2 input | Park time comes from the provider clock. A 400 writes no bench row. A message string is not a clock. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 02 | 0 | BENCH-02 | — | Quota comes from the response. No free-tier requests-per-minute table exists. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 02 | 0 | BACK-02 | — | A model with no fresh time is probed in 1–2 minutes. A named time is the next probe. A large remaining quota skips the probe. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 02 | 0 | SAFE-01 | T-2 input | The policy receives the model name, tool names, and image flag. It does not receive the message body. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
+| pending | 02 | 0 | SAFE-02 | T-2 key | A failed leg is logged without the API key. The success card counts the user request. | unit | `npm run test:unit -w @claude-code-router/core` | ✅ | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -52,10 +52,10 @@ created: "2026-11-14"
 
 ## Wave 0 Requirements
 
-- [ ] `packages/core/test/unit/class-switch/bench.test.mjs` — BENCH-01, BENCH-02, BACK-02
-- [ ] `packages/core/test/unit/class-switch/choice.test.mjs` — CHOICE-01, CHOICE-02, SAFE-01, SAFE-02, image lift
-- [ ] Existing `plan.test.mjs` stays green. Do not delete the hex or slash cases.
-- [ ] Framework install: none. `node:test` is already the runner.
+- [x] `packages/core/test/unit/class-switch/bench.test.mjs` — BENCH-01, BENCH-02, BACK-02
+- [x] `packages/core/test/unit/class-switch/choice.test.mjs` — CHOICE-01, CHOICE-02, SAFE-01, SAFE-02, image lift
+- [x] Existing `plan.test.mjs` stays green. Do not delete the hex or slash cases.
+- [x] Framework install: none. `node:test` is already the runner.
 
 ---
 
@@ -67,11 +67,19 @@ All phase behaviors have automated verification. Do not add a live provider call
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < one core unit-suite run
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < one core unit-suite run
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** validated 2026-11-15 — audit: all 7 map rows COVERED by Wave 0 test files; post-fix suite 973 pass / 3 fail (pre-existing plugin tests, out of scope) / 2 skipped; one documented classify temp-dir ENOTEMPTY flake passes on re-run.
+
+## Validation Audit 2026-11-15
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
