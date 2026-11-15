@@ -4,17 +4,17 @@ milestone: v1.0
 current_phase: 3
 current_phase_name: Step-down
 current_plan: 3
-status: executing
-stopped_at: Completed 03-02-PLAN.md (notice transports); 03-03 next
-last_updated: "2026-11-15T10:26:40.931Z"
+status: verifying
+stopped_at: Completed 03-03-PLAN.md (swap notice UI surfaces); phase 3 all plans complete, ready for verification
+last_updated: "2026-11-15T10:57:02.306Z"
 last_activity: 2026-11-15
 last_activity_desc: 03-01 executed (RED+GREEN) with summary; 03-02 next
-state_head: 8fae4fe2ed108cf0e29974f3d4ddafc5eb8c7b8d
+state_head: a75e2e42c38fa3dd96ef26296276dad27e25ca19
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 milestone_name: Automatic class switch
 ---
 
@@ -32,10 +32,10 @@ See: .planning/PROJECT.md (updated 2026-11-15)
 Phase: 3 — Step-down
 Current Plan: 3
 Total Plans in Phase: 3
-Status: Ready to execute
-Last activity: 2026-11-15 — 03-01 executed (RED+GREEN), summary written
+Status: Phase complete — ready for verification
+Last activity: 2026-11-15 — 03-03 executed (RED+GREEN), phase 3 summaries complete
 
-Progress: [███████░░░] 67%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -71,6 +71,8 @@ Progress: [███████░░░] 67%
 | Phase 02-live-choice P03 | 70min | 2 tasks | 5 files |
 | Phase 3 P01 | 45min | 2 tasks | 9 files |
 | Phase 3 P02 | 45min | 3 tasks | 10 files |
+| Phase 3 P03 | 25min | 3 tasks | 7 files |
+| Phase 3 P3 | 25min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -97,6 +99,10 @@ Recent decisions affecting current work:
 - [Phase 3]: Notice recovery is class-level shelf/credential/bench liveness; safeguardsApplies keys on the provider's own anthropic identity
 - [Phase 3]: One seam read, three transports: management RPC, Electron ipcMain.handle(appGetSwapNotice), and preload/Window.ccr/browser bridge all expose identical zero-argument getSwapNotice(); no new route, write API, or state store
 - [Phase 3]: 03-02 leaves npm run typecheck red by boundary: 14 errors pre-exist at b11f731b; 11 are in locked parent files (executor.ts, execution-plan.ts) FORK-SEAMS forbids editing beyond seam calls — recorded in deferred-items §3 and WINDOWS ledger; plan-touched files contribute zero typecheck errors
+- [Phase 03]: 03-03: swap banner is a polite role=status three-row notice fed by the existing 2s refreshRuntimeStatus poll; no dismiss control (SAFE-02 aliveness signal)
+- [Phase 03]: 03-03: SD pill/detail derive strictly from existing RequestLogEntry fields with word-bounded class tokens, best->opus and [1m] tolerance; partial data renders nothing
+- [Phase 03]: 03-03: swap-notice templates interpolate after t() via interpolateTemplate so zh may reorder placeholders; header table needs no code change
+- [Phase 3]: 03-03 leaves npm run typecheck red by the same boundary: 14 pre-existing errors at b11f731b, zero in UI files (documented in deferred-items §3 and WINDOWS ledger)
 
 ### Pending Todos
 
@@ -122,7 +128,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-15T10:26:40.784Z
-Stopped at: Completed 03-02-PLAN.md (notice transports); 03-03 next
+Last session: 2026-11-15T10:57:02.158Z
+Stopped at: Completed 03-03-PLAN.md (swap notice UI surfaces); phase 3 all plans complete, ready for verification
 Resume file: None
-Phase 3: 03-01 complete (ordered step-down, notice, headers — see 03-01-SUMMARY.md). 03-02 and 03-03 remain. Phases 1-2 verified and complete.
+Phase 3: 03-01, 03-02, and 03-03 all complete with summaries written; ready for phase verification. Phases 1-2 verified and complete.
