@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable, Writable } from "node:stream";
@@ -1100,5 +1100,175 @@ test("the notice boundary input is scalars-only, so provider secrets have no pat
     });
     assert.ok(anthropicNotice);
     assert.equal(anthropicNotice.safeguardsApplies, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Real persisted request-log reason (FALL-02 / verification check 49).
+// ---------------------------------------------------------------------------
+
+// The request-log writer shares one per-process home across the suite, so a
+// fresh-entry read must skip every row recorded before the current pipeline
+// run: the seen-id set is seeded with the rows already persisted when this
+// test starts, and every returned row joins it.
+const seenRequestLogIds = new Set();
+
+async function seedSeenRequestLogIds() {
+  await flushRequestLogRuntime(1000).catch(() => undefined);
+  const page = await requestLogRuntime.list({ pageSize: 100 }).catch(() => ({ items: [] }));
+  for (const item of page.items) {
+    seenRequestLogIds.add(item.id);
+  }
+}
+
+// Flushes and polls the real writer with the existing `until` helper and
+// returns the first NEW HTTP 200 row for the requested model written after
+// the current pipeline run, so the two reason cases can never assert against
+// the same persisted row. The row's routeTrace lives outside the list
+// projection, so the detail read attaches it.
+async function nextFreshStepDownLogEntry() {
+  const isNewRequestedSuccess = (item) =>
+    item.requestedModel === REQUESTED_MODEL && item.statusCode === 200 && !seenRequestLogIds.has(item.id);
+  await until(async () => {
+    await flushRequestLogRuntime(1000).catch(() => undefined);
+    const page = await requestLogRuntime.list({ pageSize: 100 }).catch(() => ({ items: [] }));
+    return page.items.some(isNewRequestedSuccess);
+  });
+  const page = await requestLogRuntime.list({ pageSize: 100 }).catch(() => ({ items: [] }));
+  const row = page.items.find(isNewRequestedSuccess);
+  assert.ok(row, "a fresh HTTP 200 request-log row for the requested model must be persisted");
+  seenRequestLogIds.add(row.id);
+  const entry = await requestLogRuntime.getDetail({ id: row.id });
+  assert.ok(entry, "the fresh request-log row must be readable by detail");
+  return entry;
+}
+
+function repoRootForTest() {
+  let dir = __dirname;
+  for (let depth = 0; depth < 8; depth += 1) {
+    if (existsSync(path.join(dir, "build", "test.mjs"))) {
+      return dir;
+    }
+    dir = path.resolve(dir, "..");
+  }
+  throw new Error("repo root not found from the compiled step-down test location");
+}
+
+const stepDownFixturePath = path.join(
+  repoRootForTest(),
+  "packages",
+  "ui",
+  "test",
+  "fixtures",
+  "step-down-production-log.json"
+);
+const normalizedRequestId = "req-normalized-0";
+
+// The UI fixture is generated here from a real persisted entry — never
+// hand-assembled — so the component suite exercises exactly what production
+// currently writes. The projection carries only UI-consumed scalar fields
+// plus the routeTrace: no requestBody, responseBody, requestHeaders,
+// credentialChain, or error text crosses the package boundary.
+//
+// Only volatile content is normalized to fixed test values so an unchanged
+// producer writes byte-identical fixture bytes: hop timings become a
+// seq-derived ladder and the generated /headers/x-client-request-id value is
+// replaced. Hop order, names, decisions, sources, targets, changes, and
+// counts are the producer's own values and are never rewritten.
+function deterministicProductionFixture(entry) {
+  const trace = entry.routeTrace;
+  if (!trace) {
+    throw new Error("the persisted step-down entry must carry a routeTrace");
+  }
+  const hops = trace.hops.map((hop) => ({
+    ...hop,
+    durationMs: 1,
+    startedOffsetMs: hop.seq * 5,
+    changes: hop.changes.map((change) => {
+      if (change.path !== "/headers/x-client-request-id" || change.after === undefined) {
+        return change;
+      }
+      return { ...change, after: normalizedRequestId };
+    })
+  }));
+  return {
+    credentialId: entry.credentialId,
+    provider: entry.provider,
+    requestedModel: entry.requestedModel,
+    resolvedModel: entry.resolvedModel,
+    responseHeaders: entry.responseHeaders,
+    responseModel: entry.responseModel,
+    routeTrace: { ...trace, hops }
+  };
+}
+
+test("real step-down request logs persist both exact class-switch reasons", async () => {
+  await seedSeenRequestLogIds();
+
+  await withStepDownGateway(shelf({ sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }] }), async () => {
+    // Case one: the Opus shelf is empty, so a real Sonnet 2xx swaps with the
+    // no-live reason. The entry is persisted by the real request-log writer
+    // through the actual GatewayRequestPipeline run.
+    const noLive = await runStepDownPipeline(REQUESTED_MODEL, { requestLogs: true });
+    assert.equal(noLive.failure, undefined);
+    assert.equal(noLive.response.statusCode, 200);
+    assert.equal(noLive.response.headers["x-ccr-requested-model"], REQUESTED_MODEL);
+    assert.equal(noLive.response.headers["x-ccr-served-model"], SERVED_MODEL);
+    const noLiveEntry = await nextFreshStepDownLogEntry();
+
+    // The first real persisted entry is projected — before any marked-hop
+    // assertion — into the deterministic, secret-free UI fixture.
+    const fixture = deterministicProductionFixture(noLiveEntry);
+    mkdirSync(path.dirname(stepDownFixturePath), { recursive: true });
+    const fixtureJson = `${JSON.stringify(fixture, null, 2)}\n`;
+    writeFileSync(stepDownFixturePath, fixtureJson);
+    // No raw credential secret or request text may enter the capture path.
+    const secretPattern = new RegExp(FIXTURE_SECRET.replaceAll("-", "\\-"));
+    assert.doesNotMatch(fixtureJson, secretPattern);
+    assert.doesNotMatch(fixtureJson, new RegExp(REQUEST_MARKER));
+
+    // Case two: a live Opus row refuses (429) before first token, then the
+    // Sonnet row succeeds — the reason must name the requested class.
+    const refusalEntry = await withStepDownGateway(
+      shelf({
+        opus: [{ model: "alpha/model-a", provider: "BenchProvider", score: 80 }],
+        sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }]
+      }),
+      async () => {
+        const refusal = await runStepDownPipeline(REQUESTED_MODEL, {
+          providers: [
+            providerSpec("BenchProvider", ["alpha/model-a"], { credentials: [{ api_key: "sk-bench", id: "cred:bench" }] }),
+            sonnetSpec()
+          ],
+          requestLogs: true,
+          upstreamStatuses: [429, 200]
+        });
+        assert.equal(refusal.failure, undefined);
+        assert.equal(refusal.response.statusCode, 200);
+        assert.equal(refusal.response.headers["x-ccr-requested-model"], REQUESTED_MODEL);
+        assert.equal(refusal.response.headers["x-ccr-served-model"], SERVED_MODEL);
+        return nextFreshStepDownLogEntry();
+      }
+    );
+
+    // Exactly one explicitly marked class-switch decision per real swap,
+    // carrying the exact reason, in each persisted entry's routeTrace. The
+    // real execution-plan fallback decision is retained but is never the
+    // asserted swap producer.
+    for (const [entry, reason] of [
+      [noLiveEntry, "no live Opus triple"],
+      [refusalEntry, "all Opus attempts refused before first token"]
+    ]) {
+      const hops = (entry.routeTrace?.hops ?? []).filter((hop) => hop.decision?.source === "class-switch");
+      assert.equal(hops.length, 1);
+      assert.equal(hops[0].decision?.reason, reason);
+      assert.ok(
+        (entry.routeTrace?.hops ?? []).some((hop) => hop.decision?.source === "execution-plan"),
+        "the real execution-plan fallback decision is retained"
+      );
+      const hopJson = JSON.stringify(hops[0]);
+      assert.doesNotMatch(hopJson, secretPattern);
+      assert.doesNotMatch(hopJson, new RegExp(REQUEST_MARKER));
+    }
   });
 });
