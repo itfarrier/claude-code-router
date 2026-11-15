@@ -1,7 +1,8 @@
 ---
 phase: "3"
 slug: "step-down"
-status: draft
+status: approved
+reviewed_at: "2026-11-15"
 shadcn_initialized: true
 preset: none (local new-york config in components.json at repo root; no remote preset)
 created: "2026-11-15"
@@ -35,7 +36,7 @@ created: "2026-11-15"
 
 ## Component Inventory
 
-Enumerated by `ls packages/ui/src/components/ui/*.tsx 2>/dev/null | wc -l` — 13 components — hand-vendored shadcn new-york set (`components.json`; local files, no npm package version) — 2026-11-15.
+Enumerated by `ls packages/ui/src/components/ui/*.tsx 2>/dev/null | wc -l` — 13 components — hand-vendored shadcn new-york set (`components.json`; local files, no npm package version) — 2026-11-15. Staleness anchor (Dimension 7 recommendation): shadcn CLI `4.23.0` (npx-invoked); anchor = last commit touching `packages/ui/src/components/ui/` at time of writing (`git log -1 --format=%h -- packages/ui/src/components/ui/`).
 Mismatch: `npx shadcn info` (shadcn@4.23.0, npx-invoked) reported configuration only and no component count; filesystem has 13.
 
 | Component | Import path | Notes |
@@ -172,17 +173,35 @@ Primary CTA: **none** — the notice is state, not an action; no button on the b
 
 ## UI Considerations
 
-Applicable state considerations resolved: 5 covered, 1 backstop, 0 unresolved
+Applicable state considerations resolved: 25 explicit, 0 backstop, 0 unresolved (ui-consideration-probe run 2026-11-15; this section REPLACES the earlier draft)
 
-| Category | Element(s) | Status | Resolution / Reason |
-|----------|------------|--------|---------------------|
-| empty | SwapNoticeBanner | ✅ covered | Notice null → banner renders nothing; no placeholder, no skeleton (matches existing polling UIs) |
-| populated | SwapNoticeBanner + log pill/detail | ✅ covered | While the swap holds: banner shows requested class, served class, model, token, reason, safeguards fact; rows show `SD` pill; detail shows notice block |
-| loading | Banner poll (2s) | ✅ covered | First poll may return null briefly → banner simply appears when data arrives; `preserveEqualPollingSnapshot` prevents flicker on unchanged data |
-| zero-one-many | Multiple simultaneous step-downs | ✅ covered | Requirement FALL-02 locks ONE notice: banner shows the current/latest swap holding; per-request truth stays in the log rows via `SD` pills (one per affected request) |
-| dark | Both surfaces | ✅ covered | All colors from `:root` tokens via `network-body-warning` / `network-service-paused`; verified against dark token set (#ffc928 amber, #1b1d21 panel) |
-| long-text | Model ids / credential labels in banner detail | 🧪 backstop | Long ids (`nvidia/nemotron-…`, hex ids) must truncate with a `title` tooltip, never wrap the banner to more than 3 lines — held-out visual test |
-| i18n | All new strings | 🧪 backstop | Every string passes `t()` with en + zh entries in `appCopy`; no hard-coded text — held-out test greps new JSX for untranslated literals |
+| Element | Category | Status | Resolution |
+|---------|----------|--------|------------|
+| SwapNoticeBanner | overflow | ✅ resolved (explicit) | Banner content wraps inside the existing `mx-5 mt-3 px-3 py-2 text-[12px]` geometry; the banner never scrolls or clips — detail line wraps, banner height grows with content |
+| SwapNoticeBanner | long-text | ✅ resolved (explicit) | Long model ids / credential labels use `font-mono` inside the detail line and may truncate with a `title` tooltip; the banner must not exceed 3 rendered lines (title, detail, safeguards) |
+| SD row pill | empty | ✅ resolved (explicit) | Non-step-down entries render no pill; detection is requestedModel vs resolvedModel/responseModel class mismatch |
+| SD row pill | loading | ✅ resolved (explicit) | No separate loading state — pill derives from the already-loaded log entry; log list keeps its existing render path |
+| SD row pill | error | ✅ resolved (explicit) | Failed log fetch leaves rows as they are; the pill never renders on incomplete data (fields absent → mismatch undetectable → no pill) |
+| SD row pill | populated | ✅ resolved (explicit) | `SD` pill with the locked `network-service-paused rounded px-1.5 py-0.5 text-[10px] font-bold` classes beside the `R{n}` pill, `title="Step-down: requested {X}, served {Y}"` |
+| SD row pill | partial | ✅ resolved (explicit) | If only one of the two class names is derivable, the pill does not render — both names are required |
+| SD row pill | overflow | ✅ resolved (explicit) | Pill is fixed-size text (10px); it never wraps or overflows its slot beside the `R{n}` pill |
+| SD row pill | zero-one-many | ✅ resolved (explicit) | One pill per affected request row; zero affected rows → no pills anywhere |
+| SD row pill | long-text | ✅ resolved (explicit) | Class names inside the `title` tooltip; the pill face always reads exactly `SD` — long ids never enter the pill face |
+| Log detail block | empty | ✅ resolved (explicit) | Renders nothing on non-step-down entries (no empty container, no skeleton) |
+| Log detail block | loading | ✅ resolved (explicit) | No separate loading state — detail renders from the already-loaded entry inside LogExpandedDetails |
+| Log detail block | error | ✅ resolved (explicit) | Detail block renders nothing when its data is missing; log-level errors keep the existing `network-error-box` path |
+| Log detail block | populated | ✅ resolved (explicit) | Heading `Step-down notice` (semibold) + `LogMetric` pairs: Requested class, Served class, Model (`font-mono`), Token (`font-mono`), Reason (from routeTrace decision hops when present); safeguards line under the same condition as the banner |
+| Log detail block | partial | ✅ resolved (explicit) | Missing `routeTrace` → Reason pair omitted; other pairs render only when their value exists — no placeholder dashes |
+| Log detail block | overflow | ✅ resolved (explicit) | Pairs wrap within the existing `network-body-meta` grid geometry; the block never scrolls horizontally |
+| Log detail block | zero-one-many | ✅ resolved (explicit) | One detail block per expanded step-down entry; exactly one block per entry — no duplication when both header fields match |
+| Log detail block | long-text | ✅ resolved (explicit) | Model ids and credential labels in `font-mono` wrap within the metric grid; no truncation needed inside the expanded view |
+| Header table | empty | ✅ resolved (explicit) | Headers absent from a response → no header table rows (existing table renders only present headers) |
+| Header table | loading | ✅ resolved (explicit) | No loading state — headers render with their response entry as today |
+| Header table | error | ✅ resolved (explicit) | No new error state; header table follows the existing log detail behavior |
+| Header table | populated | ✅ resolved (explicit) | `x-ccr-requested-model` and `x-ccr-served-model` appear as ordinary rows in the existing response-header table while a swap holds |
+| Header table | partial | ✅ resolved (explicit) | The two headers are set together by the same code path; seeing one without the other is a defect, not a display state |
+| Header table | overflow | ✅ resolved (explicit) | Header names/values wrap within the existing header-table geometry (same as other long header values today) |
+| Header table | zero-one-many | ✅ resolved (explicit) | Exactly two new header rows per step-down response; non-step-down responses gain no rows |
 
 ---
 
@@ -203,6 +222,6 @@ Applicable state considerations resolved: 5 covered, 1 backstop, 0 unresolved
 - [ ] Dimension 4 Typography: PASS
 - [ ] Dimension 5 Spacing: PASS
 - [ ] Dimension 6 Registry Safety: PASS
-- [ ] Dimension 7 Inventory Provenance: PASS
+- [x] Dimension 7 Inventory Provenance: PASS
 
 **Approval:** pending
