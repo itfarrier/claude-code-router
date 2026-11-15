@@ -737,7 +737,15 @@ export const appCopy: Record<ResolvedLanguage, AppCopy> = {
       "Search virtual models": "Search Fusion",
       "Virtual": "Fusion",
       "Virtual models": "Fusion",
-      "Header中未收到Authorization参数，无法进行身份验证。": "Missing Authorization header, so authentication could not be performed."
+      "Header中未收到Authorization参数，无法进行身份验证。": "Missing Authorization header, so authentication could not be performed.",
+      "{Requested} is replaced by {Served} since {HH:mm}": "{Requested} is replaced by {Served} since {HH:mm}",
+      "Serving {model} on {provider} · token {credential} · {reason}": "Serving {model} on {provider} · token {credential} · {reason}",
+      "Auto mode will not receive Anthropic safeguards from this non-Anthropic provider.": "Auto mode will not receive Anthropic safeguards from this non-Anthropic provider.",
+      "Step-down: requested {Requested}, served {Served}": "Step-down: requested {Requested}, served {Served}",
+      "Step-down notice": "Step-down notice",
+      "Requested class": "Requested class",
+      "Served class": "Served class",
+      "Reason": "Reason"
     }
   },
   zh: {
@@ -2535,7 +2543,15 @@ export const appCopy: Record<ResolvedLanguage, AppCopy> = {
       "per day": "每天",
       "per hour": "每小时",
       "per minute": "每分钟",
-      "running": "运行中"
+      "running": "运行中",
+      "{Requested} is replaced by {Served} since {HH:mm}": "自 {HH:mm} 起，{Requested} 由 {Served} 代答",
+      "Serving {model} on {provider} · token {credential} · {reason}": "服务模型 {model}（{provider}）· 令牌 {credential} · {reason}",
+      "Auto mode will not receive Anthropic safeguards from this non-Anthropic provider.": "非 Anthropic 供应商不提供 Anthropic safeguards，auto 模式将不会收到该字段。",
+      "Step-down: requested {Requested}, served {Served}": "降级：请求 {Requested}，实际服务 {Served}",
+      "Step-down notice": "降级提示",
+      "Requested class": "请求类别",
+      "Served class": "服务类别",
+      "Reason": "原因"
     }
   }
 };
@@ -2559,6 +2575,14 @@ export function useResolvedAppLanguage(): ResolvedLanguage {
 
 export function translateText(copy: AppCopy, value: string): string {
   return copy.text[value] ?? value;
+}
+
+// Interpolate a translated template after t(): placeholders use {name} keys so
+// translations may reorder them (the zh swap-banner title moves {HH:mm} first).
+export function interpolateTemplate(template: string, values: Record<string, string>): string {
+  return template.replace(/\{([^{}]+)\}/g, (match, key: string) =>
+    Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match
+  );
 }
 
 export function translateAppErrorMessage(copy: AppCopy, value: string): string {
