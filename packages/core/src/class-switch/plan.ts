@@ -19,6 +19,7 @@ import {
   providerCredentialSlug
 } from "@ccr/core/providers/runtime-topology";
 import type { ProviderModelRef, RouteAttemptPlan, RouteModelRef } from "@ccr/core/routing/contracts";
+import { parseProviderModelSelector } from "@ccr/core/routing/model-registry";
 import type { ModelRegistry } from "@ccr/core/routing/model-registry";
 
 export type ParsedClassRequest = {
@@ -515,6 +516,38 @@ export function attemptsForStepDown(
     }
   }
   return attempts.length ? attempts : undefined;
+}
+
+// Request-scoped failure attribution: a failed attempt counts as a requested-
+// class failure only when its provider/model pair is a row of the requested
+// shelf in the current snapshot. Lower-class refusals stay lower-class, so the
+// notice reason keeps "no live <Requested> triple" when the requested shelf
+// was empty. Provider error text and message bodies are never inspected.
+export function hasRequestedClassFailure(
+  failedAttempts: ReadonlyArray<{ model?: string }>,
+  requestedModel: string | undefined
+): boolean {
+  const requested = parseClassRequest(requestedModel);
+  if (!requested) {
+    return false;
+  }
+  const snapshot = readShelfSnapshot();
+  if (!snapshot) {
+    return false;
+  }
+  return failedAttempts.some((attempt) => {
+    const selector = attempt.model?.trim();
+    if (!selector) {
+      return false;
+    }
+    const parsed = parseProviderModelSelector(selector);
+    if (!parsed) {
+      return false;
+    }
+    return snapshot.shelves[requested.shelfClass].some(
+      (row) => row.provider === parsed.provider && row.model === parsed.model
+    );
+  });
 }
 
 export function shelfClassForTarget(target: RouteModelRef | undefined): ShelfClass | undefined {
