@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { GatewayStartupErrorBanner, groupSidebarNavigation, MainLayout, UpdateEntryButton } from "@ccr/ui/pages/home/components/layout.tsx";
+import type { SwapNotice } from "@ccr/core/contracts/app.ts";
+import { GatewayStartupErrorBanner, groupSidebarNavigation, MainLayout, SwapNoticeBanner, UpdateEntryButton } from "@ccr/ui/pages/home/components/layout.tsx";
 import { MediaModelConfigurationPanel, VirtualModelsView } from "@ccr/ui/pages/home/components/virtual-models.tsx";
 import { AppI18nContext, appCopy } from "@ccr/ui/pages/home/shared/i18n.tsx";
 import { createVirtualModelDraft } from "@ccr/ui/pages/home/shared/virtual-models.ts";
@@ -85,6 +86,122 @@ test("GatewayStartupErrorBanner stays hidden without a failure message", () => {
   const html = renderToStaticMarkup(<GatewayStartupErrorBanner message="" />);
 
   assert.equal(html, "");
+});
+
+// Fixed swap fixture shared by the swap-banner tests. The notice contract
+// carries operator-display scalars only, so a raw credential secret and an
+// upstream message marker are declared here as negative controls that must
+// never appear in rendered notice markup.
+const swapNoticeSecret = "sk-ant-api03-RAW-CREDENTIAL-SECRET-DO-NOT-RENDER";
+const swapNoticeMessageMarker = "upstream-error-message-marker-DO-NOT-RENDER";
+
+const swapNoticeFixture: SwapNotice = {
+  credentialLabel: "cred:sonnet",
+  model: "sonnet-live",
+  provider: "OpenRouter",
+  reason: "no live Opus triple",
+  requestedClass: "opus",
+  safeguardsApplies: false,
+  servedClass: "sonnet",
+  sinceAt: "2026-07-23T15:02:00.000Z"
+};
+
+// The banner formats sinceAt as a local 24-hour HH:mm; computing the expected
+// label with the same contract keeps the assertion timezone-independent while
+// still pinning the hour/minute format (12-hour or date rendering would fail).
+function swapSinceLabel(): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit"
+  }).format(new Date(swapNoticeFixture.sinceAt));
+}
+
+function swapBannerMarkup(notice: SwapNotice | null, language: "en" | "zh" = "en"): string {
+  return renderToStaticMarkup(
+    <AppI18nContext.Provider value={language === "zh" ? appCopy.zh : appCopy.en}>
+      <SwapNoticeBanner notice={notice} />
+    </AppI18nContext.Provider>
+  );
+}
+
+test("SwapNoticeBanner renders the current swap as a polite three-row status", () => {
+  const html = swapBannerMarkup(swapNoticeFixture);
+
+  // Polite informational status, never an assertive alert or dismissible dialog.
+  assert.match(html, /role="status"/);
+  assert.match(html, /aria-live="polite"/);
+  assert.doesNotMatch(html, /role="alert"|aria-live="assertive"/);
+  // Token-based warning surface and the downward class-move icon.
+  assert.match(html, /network-body-warning/);
+  assert.match(html, /lucide-arrow-down/);
+  assert.doesNotMatch(html, /lucide-circle-alert/);
+  // Row 1: capitalized classes and 24-hour HH:mm since label.
+  const since = swapSinceLabel();
+  assert.match(html, new RegExp(`Opus is replaced by Sonnet since ${since}`));
+  // Row 2: model, provider, credential label, and reason in one detail line.
+  assert.match(html, /Serving sonnet-live on OpenRouter · token cred:sonnet · no live Opus triple/);
+  // Row 3: safeguards sentence for the non-Anthropic served provider.
+  assert.match(html, /Auto mode will not receive Anthropic safeguards from this non-Anthropic provider\./);
+  // Three content rows render in title → detail → safeguards order.
+  const titleIndex = html.indexOf("Opus is replaced by Sonnet since");
+  const detailIndex = html.indexOf("Serving sonnet-live");
+  const safeguardsIndex = html.indexOf("Auto mode will not receive Anthropic safeguards");
+  assert.ok(titleIndex >= 0 && detailIndex > titleIndex && safeguardsIndex > detailIndex);
+  // Model id and credential label render mono with title tooltips.
+  assert.ok((html.match(/font-mono/g) ?? []).length >= 2);
+  assert.match(html, /title="sonnet-live"/);
+  assert.match(html, /title="cred:sonnet"/);
+  // Detail rows wrap inside the banner geometry instead of clipping.
+  assert.match(html, /break-words/);
+  // No action control, destructive alert styling, or light-only Badge warning.
+  assert.doesNotMatch(html, /<button|role="button"/);
+  assert.doesNotMatch(html, /destructive/);
+  assert.doesNotMatch(html, /border-amber-200|bg-amber-50|text-amber-700/);
+  // No raw secret or upstream message marker ever enters the notice markup.
+  assert.ok(!html.includes(swapNoticeSecret));
+  assert.ok(!html.includes(swapNoticeMessageMarker));
+});
+
+test("SwapNoticeBanner renders nothing without a notice", () => {
+  assert.equal(swapBannerMarkup(null), "");
+  assert.equal(swapBannerMarkup(undefined), "");
+});
+
+test("SwapNoticeBanner keeps long ids mono with tooltips and wraps the detail", () => {
+  const longModel = "OpenRouter/deepseek/deepseek-chat-v3.1-free-2026-preview-with-long-suffix";
+  const longCredential = "cred:sonnet-fallback-key-with-a-long-suffix-label";
+  const html = swapBannerMarkup({
+    ...swapNoticeFixture,
+    credentialLabel: longCredential,
+    model: longModel
+  });
+
+  assert.ok((html.match(/font-mono/g) ?? []).length >= 2);
+  assert.ok(html.includes(`title="${longModel}"`));
+  assert.ok(html.includes(`title="${longCredential}"`));
+  assert.match(html, /break-words/);
+  assert.match(html, /network-body-warning/);
+  assert.ok(!html.includes(swapNoticeSecret));
+});
+
+test("SwapNoticeBanner renders Chinese copy for the swap notice", () => {
+  const since = swapSinceLabel();
+  const html = swapBannerMarkup(swapNoticeFixture, "zh");
+
+  assert.match(html, new RegExp(`自 ${since} 起，Opus 由 Sonnet 代答`));
+  assert.match(html, /服务模型 sonnet-live（OpenRouter）· 令牌 cred:sonnet · no live Opus triple/);
+  assert.match(html, /非 Anthropic 供应商不提供 Anthropic safeguards，auto 模式将不会收到该字段。/);
+  assert.match(html, /role="status"/);
+  assert.match(html, /network-body-warning/);
+});
+
+test("SwapNoticeBanner omits the safeguards line when the served provider is Anthropic", () => {
+  const html = swapBannerMarkup({ ...swapNoticeFixture, safeguardsApplies: true });
+
+  assert.doesNotMatch(html, /safeguards from this non-Anthropic provider/);
+  assert.match(html, /Opus is replaced by Sonnet since/);
+  assert.match(html, /Serving sonnet-live on OpenRouter/);
 });
 
 test("Fusion page does not render a standalone Grok media panel", () => {
