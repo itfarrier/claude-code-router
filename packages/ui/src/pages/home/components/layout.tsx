@@ -1,4 +1,5 @@
 import type { ComponentProps } from "react";
+import type { SwapNotice } from "@ccr/core/contracts/app";
 import { MorphIcon } from "@musistudio/lucide-morph-react";
 import { collapseSidebarToExpandInspectorMorph } from "@/lib/morph-icon";
 import {
@@ -432,6 +433,17 @@ export function GatewayStartupErrorBanner({
       ) : null}
     </div>
   );
+}
+
+export type SwapNoticeBannerProps = {
+  className?: string;
+  notice?: SwapNotice | null;
+};
+
+// RED-only stub (03-03): compiles and renders nothing until the GREEN task
+// implements the persistent swap banner beside GatewayStartupErrorBanner.
+export function SwapNoticeBanner(_props: SwapNoticeBannerProps) {
+  return null;
 }
 
 function MainViewSwitch({

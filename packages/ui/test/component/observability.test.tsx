@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { AgentAnalysisSessionRow, AgentAnalysisTraceRun, RequestLogEntry, RequestLogPage } from "@ccr/core/contracts/app.ts";
+import type { AgentAnalysisSessionRow, AgentAnalysisTraceRun, RequestLogEntry, RequestLogPage, RequestRouteTrace } from "@ccr/core/contracts/app.ts";
 import { AgentAnalysisView } from "@ccr/ui/pages/home/components/dashboard.tsx";
-import { LogsView } from "@ccr/ui/pages/home/components/network-logs.tsx";
+import { LogExpandedDetails, LogsView } from "@ccr/ui/pages/home/components/network-logs.tsx";
 import { AppI18nContext, appCopy } from "@ccr/ui/pages/home/shared/i18n.tsx";
+import { networkHeaderRows } from "@ccr/ui/pages/home/shared/network.ts";
 import { createEmptyAgentAnalysis } from "@ccr/ui/pages/home/shared/usage.ts";
 
 const emptyLogPage: RequestLogPage = {
@@ -421,4 +422,230 @@ test("#1801 LogsView shows missing HTTP status as neutral", () => {
   );
   assert.match(html, /network-dot-unknown/);
   assert.doesNotMatch(html, /network-dot-error|network-state-pill-error/);
+});
+
+// Step-down fixtures reuse every existing RequestLogEntry field — no schema
+// change and no mock of React rendering. The routeTrace contains a decision hop
+// whose reason the expanded detail block should surface.
+const stepDownRouteTrace: RequestRouteTrace = {
+  attemptCount: 2,
+  complete: true,
+  hopCount: 2,
+  hops: [
+    {
+      changes: [],
+      decision: { reason: "no live Opus triple", source: "class-switch" },
+      durationMs: 5,
+      kind: "decision",
+      name: "router.policy",
+      phase: "routing",
+      seq: 1,
+      startedOffsetMs: 0,
+      status: "ok"
+    },
+    {
+      attempt: 1,
+      changes: [],
+      durationMs: 115,
+      kind: "attempt",
+      name: "upstream.attempt.prepare",
+      phase: "attempt",
+      seq: 2,
+      startedOffsetMs: 5,
+      status: "ok"
+    }
+  ],
+  truncated: false,
+  version: 2
+};
+
+const stepDownRequestLogEntry: RequestLogEntry = {
+  ...sampleRequestLogEntry,
+  credentialId: "cred:sonnet",
+  provider: "OpenRouter",
+  requestedModel: "claude-opus-4-6",
+  resolvedModel: "OpenRouter/claude-sonnet-4",
+  responseModel: "claude-opus-4-6",
+  responseHeaders: {
+    "content-type": "application/json",
+    "x-ccr-requested-model": "claude-opus-4-6",
+    "x-ccr-served-model": "OpenRouter/claude-sonnet-4"
+  },
+  routeTrace: stepDownRouteTrace
+};
+
+// Controls: same class, higher class (upgrade), non-class models, and an
+// incomplete entry with only one derivable model name.
+const sameClassLogEntry: RequestLogEntry = {
+  ...stepDownRequestLogEntry,
+  requestedModel: "claude-opus-4-6",
+  resolvedModel: "claude-opus-4-6",
+  responseModel: "claude-opus-4-6",
+  responseHeaders: {}
+};
+const higherClassLogEntry: RequestLogEntry = {
+  ...stepDownRequestLogEntry,
+  requestedModel: "claude-sonnet-4",
+  resolvedModel: "claude-opus-4-6",
+  responseModel: "claude-sonnet-4"
+};
+const nonClassLogEntry: RequestLogEntry = {
+  ...stepDownRequestLogEntry,
+  requestedModel: "glm-5.3-flash",
+  resolvedModel: "glm-5.3-flash",
+  responseModel: "glm-5.3-flash"
+};
+const incompleteLogEntry: RequestLogEntry = {
+  ...stepDownRequestLogEntry,
+  requestedModel: undefined,
+  resolvedModel: undefined,
+  responseModel: "claude-sonnet-4"
+};
+
+function logsViewMarkup(items: RequestLogEntry[]): string {
+  return renderToStaticMarkup(
+    <AppI18nContext.Provider value={appCopy.en}>
+      <LogsView
+        error=""
+        filter={{ page: 1, pageSize: 25, status: "all" }}
+        loading={false}
+        page={{ ...emptyLogPage, items, total: items.length }}
+        refreshLogs={() => undefined}
+        updateFilter={() => undefined}
+      />
+    </AppI18nContext.Provider>
+  );
+}
+
+function expandedDetailsMarkup(entry: RequestLogEntry, language: "en" | "zh" = "en"): string {
+  return renderToStaticMarkup(
+    <AppI18nContext.Provider value={language === "zh" ? appCopy.zh : appCopy.en}>
+      <LogExpandedDetails entry={entry} />
+    </AppI18nContext.Provider>
+  );
+}
+
+const stepDownPillPattern = /network-service-paused[^"]*shrink-0[^"]*whitespace-nowrap[^"]*rounded px-1\.5 py-0\.5 text-\[10px\] font-bold/;
+
+test("step-down log entries show SD pills and expanded details", () => {
+  const listHtml = logsViewMarkup([stepDownRequestLogEntry]);
+
+  // One fixed-face SD pill per affected row variant (desktop row + mobile card).
+  assert.equal((listHtml.match(/>SD</g) ?? []).length, 2);
+  assert.equal((listHtml.match(/title="Step-down: requested Opus, served Sonnet"/g) ?? []).length, 2);
+  assert.match(listHtml, stepDownPillPattern);
+  // The pill is noninteractive and never carries a click affordance.
+  assert.doesNotMatch(listHtml, /<button[^>]*>[^<]*SD</);
+  // This entry has no retries, so only the SD pill appears (no R pill).
+  assert.doesNotMatch(listHtml, />R\d+</);
+
+  const expandedHtml = expandedDetailsMarkup(stepDownRequestLogEntry);
+
+  // Exactly one warning block, above the existing metric grid.
+  assert.equal((expandedHtml.match(/network-body-warning/g) ?? []).length, 1);
+  assert.ok(expandedHtml.indexOf("network-body-warning") < expandedHtml.indexOf("network-body-meta"));
+  assert.match(expandedHtml, /Step-down notice/);
+  // Available LogMetric pairs with capitalized classes and mono values.
+  assert.match(expandedHtml, /Requested class/);
+  assert.match(expandedHtml, /Served class/);
+  assert.match(expandedHtml, />Opus</);
+  assert.match(expandedHtml, />Sonnet</);
+  assert.match(expandedHtml, /font-mono[^>]*>claude-sonnet-4</);
+  assert.match(expandedHtml, /font-mono[^>]*>cred:sonnet</);
+  assert.match(expandedHtml, /no live Opus triple/);
+  // Non-Anthropic served provider shows the same safeguards sentence.
+  assert.match(expandedHtml, /Auto mode will not receive Anthropic safeguards from this non-Anthropic provider\./);
+  // No placeholder dashes for missing values.
+  assert.doesNotMatch(expandedHtml, />-</);
+});
+
+test("SD pills only mark strict lower-class step-down rows", () => {
+  const html = logsViewMarkup([
+    sameClassLogEntry,
+    higherClassLogEntry,
+    nonClassLogEntry,
+    incompleteLogEntry
+  ]);
+
+  // Zero affected rows → no pills anywhere.
+  assert.ok(!html.includes(">SD<"));
+  assert.ok(!html.includes("Step-down notice"));
+  assert.doesNotMatch(html, stepDownPillPattern);
+
+  // Two affected rows render exactly two pills per variant (4 total).
+  const twoRowsHtml = logsViewMarkup([stepDownRequestLogEntry, { ...stepDownRequestLogEntry, id: 2 }]);
+  assert.equal((twoRowsHtml.match(/>SD</g) ?? []).length, 4);
+});
+
+test("SD pill face stays fixed while long model ids live in the title tooltip", () => {
+  const longIdEntry: RequestLogEntry = {
+    ...stepDownRequestLogEntry,
+    resolvedModel: "OpenRouter/anthropic/claude-sonnet-4-20260514-with-very-long-route-suffix"
+  };
+  const html = logsViewMarkup([longIdEntry]);
+
+  const pillTitles = html.match(/title="Step-down[^"]*"/g) ?? [];
+  assert.ok(pillTitles.length >= 2);
+  for (const title of pillTitles) {
+    // The tooltip carries class names only — never a model id.
+    assert.ok(title === 'title="Step-down: requested Opus, served Sonnet"', title);
+  }
+  // The pill face is exactly the two letters SD.
+  assert.match(html, /network-service-paused[^"]*"[^>]*>SD</);
+});
+
+test("expanded step-down details render available pairs and omit missing ones", () => {
+  // Missing routeTrace omits only the Reason pair.
+  const noReasonHtml = expandedDetailsMarkup({ ...stepDownRequestLogEntry, routeTrace: undefined });
+  assert.match(noReasonHtml, /Step-down notice/);
+  assert.doesNotMatch(noReasonHtml, /Reason/);
+  // The reason text is gone entirely — never rendered as a dash substitute.
+  assert.doesNotMatch(noReasonHtml, /no live Opus triple/);
+
+  // Missing credential omits only the Token pair.
+  const noCredentialHtml = expandedDetailsMarkup({ ...stepDownRequestLogEntry, credentialId: undefined });
+  assert.match(noCredentialHtml, /Step-down notice/);
+  assert.doesNotMatch(noCredentialHtml, /Token/);
+  assert.match(noCredentialHtml, /font-mono[^>]*>claude-sonnet-4</);
+
+  // Anthropic served provider hides the safeguards sentence.
+  const anthropicHtml = expandedDetailsMarkup({ ...stepDownRequestLogEntry, provider: "anthropic" });
+  assert.doesNotMatch(anthropicHtml, /safeguards from this non-Anthropic provider/);
+
+  // Same-class and incomplete entries render no step-down block at all.
+  for (const entry of [sameClassLogEntry, incompleteLogEntry]) {
+    const html = expandedDetailsMarkup(entry);
+    assert.ok(!html.includes("Step-down notice"), entry.requestId);
+    assert.equal((html.match(/network-body-warning/g) ?? []).length, 0);
+  }
+
+  // Exactly one detail block per expanded entry, even when both header fields agree.
+  const onceHtml = expandedDetailsMarkup(stepDownRequestLogEntry);
+  assert.equal((onceHtml.match(/Step-down notice/g) ?? []).length, 1);
+});
+
+test("response header rows expose the paired step-down headers as ordinary rows", () => {
+  // LogJsonPanel renders its header tab from networkHeaderRows(entry.responseHeaders)
+  // with no header-table code change in this phase; assert the exact row contract
+  // that table displays, including the copyable text values and absence behavior.
+  // Header names are title-cased by the existing formatHeaderName display rule,
+  // exactly like every other header row in the table.
+  const rows = networkHeaderRows(stepDownRequestLogEntry.responseHeaders);
+  const requestedRows = rows.filter(([key]) => key === "X-Ccr-Requested-Model");
+  const servedRows = rows.filter(([key]) => key === "X-Ccr-Served-Model");
+
+  assert.equal(requestedRows.length, 1);
+  assert.equal(servedRows.length, 1);
+  assert.deepEqual(requestedRows[0], ["X-Ccr-Requested-Model", "claude-opus-4-6"]);
+  assert.deepEqual(servedRows[0], ["X-Ccr-Served-Model", "OpenRouter/claude-sonnet-4"]);
+
+  // Headers absent from a response → no header rows at all.
+  assert.deepEqual(networkHeaderRows({}), []);
+
+  // The paired headers appear as ordinary rows in the same row shape as other
+  // header values (name + raw value, wrapped by the existing value-cell geometry).
+  for (const [key, value] of rows) {
+    assert.equal(typeof key, "string");
+    assert.equal(typeof value, "string");
+  }
 });
