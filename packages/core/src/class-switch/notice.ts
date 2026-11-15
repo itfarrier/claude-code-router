@@ -1,21 +1,19 @@
+import { loadAppConfig } from "@ccr/core/config/config";
+import type { GatewayProviderConfig, SwapNotice, SwapNoticeClass } from "@ccr/core/contracts/app";
+import {
+  hasLiveTripleForClass,
+  parseClassRequest,
+  shelfClassForTarget
+} from "@ccr/core/class-switch/plan";
+import { normalizeProviderProtocol } from "@ccr/core/providers/runtime-topology";
 import type { RouteModelRef } from "@ccr/core/routing/contracts";
+import { modelRegistryForConfig, type ModelRegistry } from "@ccr/core/routing/model-registry";
 
-// One process-local swap notice record (FALL-02). RED phase: compiling stubs
-// only — no production step-down or notice behavior exists before the GREEN
-// task passes RED_EVIDENCE_OK. The singleton record, the actual-success
-// recording, the latest-swap replacement, and the read-time live-again
-// reconciliation land in GREEN behind these exact exports.
-
-export type SwapNoticeRecord = {
-  requestedClass: string;
-  servedClass: string;
-  model: string;
-  provider: string;
-  credentialLabel: string;
-  reason: string;
-  sinceAt: string;
-  safeguardsApplies: boolean;
-};
+// One process-local swap notice record (FALL-02). Process memory only: no disk
+// persistence, no timer, and no cross-request shared step-down state. The
+// latest successful swap wins; a read reconciles the saved requested class
+// against class-level shelf/credential/bench liveness and clears the record
+// when that class is live again.
 
 export type StepDownSuccessInput = {
   requestedModel?: string;
@@ -25,21 +23,77 @@ export type StepDownSuccessInput = {
   hadRequestedClassFailure: boolean;
 };
 
-export function recordStepDownSuccess(_input: StepDownSuccessInput): SwapNoticeRecord | null {
-  // RED stub: an actual lower-class success records nothing yet.
-  return null;
+let currentSwapNotice: SwapNotice | null = null;
+
+const SHELF_CLASS_RANK: SwapNoticeClass[] = ["fable", "opus", "sonnet", "haiku"];
+
+function isStrictlyLower(served: SwapNoticeClass, requested: SwapNoticeClass): boolean {
+  return SHELF_CLASS_RANK.indexOf(served) > SHELF_CLASS_RANK.indexOf(requested);
 }
 
-export function recordSwapNotice(_notice: SwapNoticeRecord): SwapNoticeRecord | null {
-  // RED stub: replacement of the singleton record is not implemented yet.
-  return null;
+function capitalClass(shelfClass: SwapNoticeClass): string {
+  return shelfClass.charAt(0).toUpperCase() + shelfClass.slice(1);
 }
 
-export async function readSwapNotice(_options: { modelRegistry?: unknown } = {}): Promise<SwapNoticeRecord | null> {
-  // RED stub: no record exists and no live-again reconciliation runs yet.
-  return null;
+// Actual Anthropic provider identity: the provider's own `provider` (or an
+// explicit `type`) naming Anthropic. An anthropic_messages protocol borrowed by
+// a non-Anthropic provider stays false — auto mode must not be told that a
+// provider invents Anthropic safeguards.
+function safeguardsAppliesFor(provider: GatewayProviderConfig): boolean {
+  const identity = provider.provider?.trim().toLowerCase() ?? provider.type?.trim().toLowerCase() ?? "";
+  return identity === "anthropic" && normalizeProviderProtocol(identity) === "anthropic_messages";
+}
+
+// Records an actual lower-class success. Returns the single stored record for a
+// real step-down and null otherwise; nothing is stored for same-class or
+// non-class successes. Only scalars cross this boundary: the parsed requested
+// class, the target route, the model names, and a credential slug. Message
+// bodies, provider keys, and provider error text never reach the notice.
+export function recordStepDownSuccess(input: StepDownSuccessInput): SwapNotice | null {
+  const requested = parseClassRequest(input.requestedModel);
+  if (!requested) {
+    return null;
+  }
+  if (input.target?.kind !== "provider") {
+    return null;
+  }
+  const servedClass = shelfClassForTarget(input.target);
+  if (!servedClass || !isStrictlyLower(servedClass, requested.shelfClass)) {
+    return null;
+  }
+  const reason = input.hadRequestedClassFailure
+    ? `all ${capitalClass(requested.shelfClass)} attempts refused before first token`
+    : `no live ${capitalClass(requested.shelfClass)} triple`;
+  return recordSwapNotice({
+    credentialLabel: input.credentialLabel?.trim() || "none",
+    model: input.target.model,
+    provider: input.target.provider.name ?? "",
+    reason,
+    requestedClass: requested.shelfClass,
+    safeguardsApplies: safeguardsAppliesFor(input.target.provider),
+    servedClass,
+    sinceAt: new Date().toISOString()
+  });
+}
+
+export function recordSwapNotice(notice: SwapNotice): SwapNotice {
+  currentSwapNotice = notice;
+  return currentSwapNotice;
+}
+
+export async function readSwapNotice(options: { modelRegistry?: ModelRegistry } = {}): Promise<SwapNotice | null> {
+  const record = currentSwapNotice;
+  if (!record) {
+    return null;
+  }
+  const registry = options.modelRegistry ?? modelRegistryForConfig(await loadAppConfig());
+  if (hasLiveTripleForClass(record.requestedClass, registry)) {
+    currentSwapNotice = null;
+    return null;
+  }
+  return record;
 }
 
 export function clearSwapNotice(): void {
-  // RED stub: no process-local notice state to clear yet.
+  currentSwapNotice = null;
 }

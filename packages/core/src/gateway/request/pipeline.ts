@@ -28,7 +28,7 @@ import {
 import { isCodexResponsesCompactPath, type ContextArchiveResponseMode } from "@ccr/core/gateway/context-archive/protocol";
 import { adaptRouteRequestBody, restoreRouteRequestBody } from "@ccr/core/routing/protocol-adapter";
 import { reserveApiKeyLimits } from "@ccr/core/gateway/auth/api-key-authorizer";
-import { isClassAttempt } from "@ccr/core/class-switch/seam";
+import { isClassAttempt, recordStepDownSuccess } from "@ccr/core/class-switch/seam";
 import { recordProviderCredentialOutcome } from "@ccr/core/providers/credential-pool";
 import { codexApplyPatchBridgeResponseStream, prepareCodexApplyPatchBridgeRequest } from "@ccr/core/gateway/features/codex-patch-bridge";
 import { codexMultiAgentBridgeResponseStream, prepareCodexMultiAgentBridgeRequest } from "@ccr/core/gateway/features/codex-multi-agent-bridge";
@@ -856,6 +856,11 @@ export class GatewayRequestPipeline {
         this.config
       );
       pluginResponseHeaders.forEach((value, name) => responseHeaders.set(name, value));
+      // An upstream cannot forge the step-down disclosure headers: they are
+      // removed from every response here and set together only after an actual
+      // lower-class 2xx below.
+      responseHeaders.delete("x-ccr-requested-model");
+      responseHeaders.delete("x-ccr-served-model");
       const upstreamResponse = upstreamResult.response;
       if (upstreamResponse.ok) {
         finalizeContextArchiveRequest(contextArchiveRecord, {
@@ -912,6 +917,23 @@ export class GatewayRequestPipeline {
         finalizeOpenRouterDiscountSelection(false);
         writeRequestLog(clientClosedRequestStatusCode, responseHeaders, "", false, clientDisconnectMessage);
         return;
+      }
+      if (upstreamResponse.ok) {
+        // An actual lower-class 2xx is the only swap. Same-class and non-class
+        // successes record nothing, so no header is set for them either. The
+        // call precedes every response.writeHead path and every log read of
+        // responseHeaders below.
+        const swapNotice = recordStepDownSuccess({
+          credentialLabel: upstreamResult.attempt.credentialIds?.[0],
+          hadRequestedClassFailure: upstreamResult.failedAttempts.length > 0,
+          requestedModel,
+          servedModel: routedModel,
+          target: upstreamResult.attempt.target
+        });
+        if (swapNotice) {
+          responseHeaders.set("x-ccr-requested-model", sanitizeHeaderValue(requestedModel ?? routedModel));
+          responseHeaders.set("x-ccr-served-model", sanitizeHeaderValue(routedModel));
+        }
       }
       if (
         upstreamResponse.body &&

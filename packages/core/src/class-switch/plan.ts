@@ -17,7 +17,7 @@ import {
   providerCredentialRuntimeId,
   providerCredentialSlug
 } from "@ccr/core/providers/runtime-topology";
-import type { ProviderModelRef, RouteAttemptPlan } from "@ccr/core/routing/contracts";
+import type { ProviderModelRef, RouteAttemptPlan, RouteModelRef } from "@ccr/core/routing/contracts";
 import type { ModelRegistry } from "@ccr/core/routing/model-registry";
 
 export type ParsedClassRequest = {
@@ -317,6 +317,45 @@ export type AttemptsForClassScalars = {
   sessionId?: string;
 };
 
+// Authoritative class rank. A step-down plan walks the requested class and
+// then only the strictly lower classes, in this order.
+const SHELF_CLASS_RANK: ShelfClass[] = ["fable", "opus", "sonnet", "haiku"];
+
+// shortcut: which shelf produced each attempt target, process memory only.
+// The executor carries the RouteModelRef object identity into the upstream
+// attempt, so notice recording can look the served class up without adding a
+// field to RouteAttemptPlan or UpstreamAttempt.
+const targetShelfByReference = new WeakMap<RouteModelRef, ShelfClass>();
+
+// The one-shelf eligibility core shared by attemptsForClass,
+// attemptsForStepDown, and hasLiveTripleForClass: the exact phase-1/2 filters
+// (one-million window, bench, registry resolution, tools, images, context,
+// live credentials) and the score/tie-break ordering.
+function filteredShelfRows(
+  rows: ShelfRow[],
+  requireOneMillion: boolean,
+  modelRegistry: ModelRegistry | undefined,
+  request: { estimatedTokens: number; hasImage: boolean; toolNames: string[] }
+): ShelfRow[] {
+  return [...rows]
+    .filter((row) => rowPassesOneMillionFilter(row, requireOneMillion))
+    .filter((row) => !isBenched(row.provider, row.model))
+    .filter((row) => {
+      const selector = `${row.provider}/${row.model}`;
+      const target = modelRegistry?.resolve(selector);
+      if (target?.kind !== "provider") {
+        return false;
+      }
+      return (
+        !rowFailsToolRequest(row, target, request.toolNames) &&
+        !rowFailsImageRequest(row, target, request.hasImage) &&
+        !rowFailsContext(row, request.estimatedTokens) &&
+        hasLiveCredential(target.provider, row)
+      );
+    })
+    .sort(compareShelfRows);
+}
+
 function toolTurnAttempt(
   parsed: ParsedClassRequest,
   modelRegistry: ModelRegistry | undefined,
@@ -376,27 +415,94 @@ export function attemptsForClass(
     return undefined;
   }
 
-  const rows = [...snapshot.shelves[parsed.shelfClass]]
-    .filter((row) => rowPassesOneMillionFilter(row, parsed.requireOneMillion))
-    .filter((row) => !isBenched(row.provider, row.model))
-    .filter((row) => {
-      const selector = `${row.provider}/${row.model}`;
-      const target = modelRegistry?.resolve(selector);
-      if (target?.kind !== "provider") {
-        return false;
-      }
-      return (
-        !rowFailsToolRequest(row, target, toolNames) &&
-        !rowFailsImageRequest(row, target, hasImage) &&
-        !rowFailsContext(row, estimatedTokens) &&
-        hasLiveCredential(target.provider, row)
-      );
-    })
-    .sort(compareShelfRows);
+  const rows = filteredShelfRows(snapshot.shelves[parsed.shelfClass], parsed.requireOneMillion, modelRegistry, {
+    estimatedTokens,
+    hasImage,
+    toolNames
+  });
 
   const ordered = finalizeRowOrder(rows);
   const attempts = buildAttempts(ordered, modelRegistry);
   return attempts.length ? attempts : undefined;
+}
+
+// Deliberate phase-3 step-down planner. The requested shelf keeps priority and
+// every strictly lower class is appended in rank order, so the parent executor
+// walks one list: requested-class rows first, then sonnet/haiku (or fable/opus/
+// sonnet/haiku below fable). The list is built once per request from one
+// snapshot, with one thin-share decision consumed per call and the same
+// decision applied inside each nonempty class. The request-local sent set in
+// executor.ts stays the only sent state.
+export function attemptsForStepDown(
+  parsed: ParsedClassRequest,
+  modelRegistry: ModelRegistry | undefined,
+  scalars?: AttemptsForClassScalars
+): RouteAttemptPlan[] | undefined {
+  const toolNames = scalars?.toolNames ?? [];
+  const hasImage = scalars?.hasImage ?? false;
+  const estimatedTokens = scalars?.estimatedTokens ?? 0;
+  const sessionId = scalars?.sessionId?.trim();
+
+  if (scalars?.toolTurn && sessionId) {
+    const sticky = toolTurnAttempt(parsed, modelRegistry, sessionId);
+    if (sticky) {
+      thinShareCounter += 1;
+      for (const attempt of sticky) {
+        if (attempt.target) {
+          targetShelfByReference.set(attempt.target, parsed.shelfClass);
+        }
+      }
+      return sticky;
+    }
+  }
+
+  const snapshot = readShelfSnapshot();
+  if (!snapshot) {
+    return undefined;
+  }
+
+  const requestedRank = SHELF_CLASS_RANK.indexOf(parsed.shelfClass);
+  const lowerShelves = SHELF_CLASS_RANK.slice(requestedRank + 1);
+  const thinShareTriggered = (thinShareCounter + 1) % 20 === 0;
+  thinShareCounter += 1;
+
+  const request = { estimatedTokens, hasImage, toolNames };
+  const attempts: RouteAttemptPlan[] = [];
+  for (const shelfClass of [parsed.shelfClass, ...lowerShelves]) {
+    const rows = filteredShelfRows(snapshot.shelves[shelfClass], parsed.requireOneMillion, modelRegistry, request);
+    const ordered = thinShareTriggered ? applyThinShare(rows) : rows;
+    for (const attempt of buildAttempts(ordered, modelRegistry)) {
+      attempts.push({ ...attempt, index: attempts.length });
+      if (attempt.target) {
+        targetShelfByReference.set(attempt.target, shelfClass);
+      }
+    }
+  }
+  return attempts.length ? attempts : undefined;
+}
+
+export function shelfClassForTarget(target: RouteModelRef | undefined): ShelfClass | undefined {
+  if (!target) {
+    return undefined;
+  }
+  return targetShelfByReference.get(target);
+}
+
+// Class-level shelf/credential/bench liveness used by notice recovery. This is
+// deliberately not a request-specific capability predicate: tool names, image
+// flags, token estimates, and the one-million window are vacuous here, and the
+// thin-share counter is not consumed.
+export function hasLiveTripleForClass(shelfClass: ShelfClass, modelRegistry: ModelRegistry | undefined): boolean {
+  const snapshot = readShelfSnapshot();
+  if (!snapshot) {
+    return false;
+  }
+  const rows = filteredShelfRows(snapshot.shelves[shelfClass], false, modelRegistry, {
+    estimatedTokens: 0,
+    hasImage: false,
+    toolNames: []
+  });
+  return buildAttempts(rows, modelRegistry).length > 0;
 }
 
 const IMAGE_BLOCK_TYPES = new Set(["image", "image_url", "input_image"]);
