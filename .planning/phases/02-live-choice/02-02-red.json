@@ -1,9 +1,0 @@
-{
-  "command": "node --test --test-reporter=tap --test-name-pattern=\"retry-after seconds\" .test-dist/core/test/class-switch/bench.test.js",
-  "exitCode": 1,
-  "output": "TAP version 13\n# Subtest: retry-after seconds park that credential on that model\nnot ok 1 - retry-after seconds park that credential on that model\n  ---\n  duration_ms: 2.613333\n  type: 'test'\n  location: '/Users/itfarrier/pet/claude-code-router/.test-dist/core/test/class-switch/bench.test.js:46292:30'\n  failureType: 'testCodeFailure'\n  error: |-\n    Expected values to be strictly equal:\n    + actual - expected\n    \n    + undefined\n    - 1700000120000\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 1700000120000\n  operator: 'strictEqual'\n  stack: |-\n    /Users/itfarrier/pet/claude-code-router/.test-dist/core/test/class-switch/bench.test.js:46303:27\n    async withBenchEnv (/Users/itfarrier/pet/claude-code-router/.test-dist/core/test/class-switch/bench.test.js:46260:5)\n    async TestContext.<anonymous> (/Users/itfarrier/pet/claude-code-router/.test-dist/core/test/class-switch/bench.test.js:46293:3)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 97.88",
-  "targetTest": "retry-after seconds park that credential on that model",
-  "targetFile": ".test-dist/core/test/class-switch/bench.test.js",
-  "expected": "1700000120000",
-  "actual": "undefined"
-}

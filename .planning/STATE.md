@@ -23,7 +23,7 @@ current_phase: 3
 See: .planning/PROJECT.md (updated 2026-11-15)
 
 **Core value:** Claude Code orders a class. CCR serves the strongest live model in that class, and Claude does not fail when that class is empty.
-**Current focus:** Milestone v1.0 complete — closing out (final phase-1 verification refresh, milestone audit → complete → cleanup)
+**Current focus:** Planning next milestone (v1.0 "Automatic class switch" shipped 2026-11-15)
 
 ## Current Position
 
@@ -134,9 +134,9 @@ Items acknowledged and deferred at milestone close, most recent first:
 ## Session Continuity
 
 Last session: 2026-11-15
-Stopped at: Phase 3 complete — all 3 phases complete; ready for milestone audit and completion
+Stopped at: v1.0 "Automatic class switch" shipped — archived to milestones/, tagged v1.0
 Resume file: None
-Phases 1-3 all verified (verification passed after delegated human-item sign-offs), secured (0 open threats each), and complete. Next: final phase-1 verification refresh (covered files changed in phases 2-3), then /gsd-audit-milestone → /gsd-complete-milestone → /gsd-cleanup.
+All 3 phases verified passed, secured (0 open threats), Nyquist compliant; milestone audit passed (14/14 requirements, 7/7 integration flows); 9 close items acknowledged and disclosed in Deferred Items. Next: /gsd-new-milestone (fresh requirements), /gsd-cleanup for archive housekeeping.
 
 ## Operator Next Steps
 

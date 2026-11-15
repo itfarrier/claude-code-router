@@ -1,9 +1,0 @@
-{
-  "command": "node --test .test-dist/core/test/class-switch/plan.test.js",
-  "exitCode": 1,
-  "output": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'claude-opus-4-6'\n- 'BenchProvider/motif-technologies/motif-3'",
-  "targetTest": "claude-opus opens the scored opus shelf",
-  "targetFile": "packages/core/test/unit/class-switch/plan.test.mjs",
-  "expected": "BenchProvider/motif-technologies/motif-3",
-  "actual": "claude-opus-4-6"
-}
