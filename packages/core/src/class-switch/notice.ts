@@ -1,12 +1,7 @@
 import { loadAppConfig } from "@ccr/core/config/config";
-import type { GatewayProviderConfig, SwapNotice, SwapNoticeClass } from "@ccr/core/contracts/app";
-import {
-  hasLiveTripleForClass,
-  parseClassRequest,
-  shelfClassForTarget
-} from "@ccr/core/class-switch/plan";
-import { normalizeProviderProtocol } from "@ccr/core/providers/runtime-topology";
-import type { RouteModelRef } from "@ccr/core/routing/contracts";
+import type { SwapNotice, SwapNoticeClass } from "@ccr/core/contracts/app";
+import { hasLiveTripleForClass, parseClassRequest } from "@ccr/core/class-switch/plan";
+import { safeguardsAppliesForIdentity } from "@ccr/core/class-switch/provider-identity";
 import { modelRegistryForConfig, type ModelRegistry } from "@ccr/core/routing/model-registry";
 
 // One process-local swap notice record (FALL-02). Process memory only: no disk
@@ -15,12 +10,18 @@ import { modelRegistryForConfig, type ModelRegistry } from "@ccr/core/routing/mo
 // against class-level shelf/credential/bench liveness and clears the record
 // when that class is live again.
 
+// Scalar-only boundary (WR-05): every field is a string, boolean, or class
+// name derived before the call. No provider config object, route reference,
+// or message body can enter the notice through this input, so no provider
+// credential secret has a path into notice state.
 export type StepDownSuccessInput = {
-  requestedModel?: string;
-  servedModel?: string;
-  target: RouteModelRef | undefined;
   credentialLabel?: string;
   hadRequestedClassFailure: boolean;
+  model: string;
+  provider: string;
+  providerIdentity?: string;
+  requestedModel?: string;
+  servedClass: SwapNoticeClass;
 };
 
 let currentSwapNotice: SwapNotice | null = null;
@@ -35,30 +36,19 @@ function capitalClass(shelfClass: SwapNoticeClass): string {
   return shelfClass.charAt(0).toUpperCase() + shelfClass.slice(1);
 }
 
-// Actual Anthropic provider identity: the provider's own `provider` (or an
-// explicit `type`) naming Anthropic. An anthropic_messages protocol borrowed by
-// a non-Anthropic provider stays false — auto mode must not be told that a
-// provider invents Anthropic safeguards.
-function safeguardsAppliesFor(provider: GatewayProviderConfig): boolean {
-  const identity = provider.provider?.trim().toLowerCase() ?? provider.type?.trim().toLowerCase() ?? "";
-  return identity === "anthropic" && normalizeProviderProtocol(identity) === "anthropic_messages";
-}
-
-// Records an actual lower-class success. Returns the single stored record for a
+// Records an actual lower-class success from the derived scalars. The served
+// class, the model, the provider display name, and the provider's Anthropic
+// identity are computed by the caller before the call (see the seam's
+// recordStepDownSuccessFromTarget). Returns the single stored record for a
 // real step-down and null otherwise; nothing is stored for same-class or
-// non-class successes. Only scalars cross this boundary: the parsed requested
-// class, the target route, the model names, and a credential slug. Message
-// bodies, provider keys, and provider error text never reach the notice.
+// non-class successes. Message bodies, provider keys, and provider error text
+// never reach the notice.
 export function recordStepDownSuccess(input: StepDownSuccessInput): SwapNotice | null {
   const requested = parseClassRequest(input.requestedModel);
   if (!requested) {
     return null;
   }
-  if (input.target?.kind !== "provider") {
-    return null;
-  }
-  const servedClass = shelfClassForTarget(input.target);
-  if (!servedClass || !isStrictlyLower(servedClass, requested.shelfClass)) {
+  if (!isStrictlyLower(input.servedClass, requested.shelfClass)) {
     return null;
   }
   const reason = input.hadRequestedClassFailure
@@ -66,12 +56,12 @@ export function recordStepDownSuccess(input: StepDownSuccessInput): SwapNotice |
     : `no live ${capitalClass(requested.shelfClass)} triple`;
   return recordSwapNotice({
     credentialLabel: input.credentialLabel?.trim() || "none",
-    model: input.target.model,
-    provider: input.target.provider.name ?? "",
+    model: input.model,
+    provider: input.provider,
     reason,
     requestedClass: requested.shelfClass,
-    safeguardsApplies: safeguardsAppliesFor(input.target.provider),
-    servedClass,
+    safeguardsApplies: safeguardsAppliesForIdentity(input.providerIdentity),
+    servedClass: input.servedClass,
     sinceAt: new Date().toISOString()
   });
 }

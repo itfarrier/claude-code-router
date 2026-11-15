@@ -5,7 +5,11 @@ import {
   startClassSwitchCatalog,
   stopClassSwitchCatalog
 } from "@ccr/core/class-switch/catalog";
-import { clearSwapNotice } from "@ccr/core/class-switch/notice";
+import { clearSwapNotice, recordStepDownSuccess } from "@ccr/core/class-switch/notice";
+import { providerIdentityName } from "@ccr/core/class-switch/provider-identity";
+import {
+  shelfClassForTarget
+} from "@ccr/core/class-switch/plan";
 import { loadAppConfig } from "@ccr/core/config/config";
 import {
   attemptsForStepDown,
@@ -24,8 +28,10 @@ import type {
   AppConfig,
   GatewayProviderConfig,
   ProviderModelMetadata,
-  RouterFallbackConfig
+  RouterFallbackConfig,
+  SwapNotice
 } from "@ccr/core/contracts/app";
+import type { RouteModelRef } from "@ccr/core/routing/contracts";
 import {
   findModelCatalogEntry,
   findProviderModelCatalogEntry,
@@ -205,6 +211,35 @@ export {
   readSwapNotice as getSwapNotice,
   recordStepDownSuccess
 } from "@ccr/core/class-switch/notice";
+
+// The pipeline's seam entry: it carries the route target object in process
+// memory, then derives every notice scalar (served shelf class from the
+// planner's snapshot mapping, model, provider display name, and the provider's
+// Anthropic identity) before calling the notice boundary. Provider config
+// objects and their credential secrets never cross into the notice input.
+export function recordStepDownSuccessFromTarget(input: {
+  credentialLabel?: string;
+  hadRequestedClassFailure: boolean;
+  requestedModel?: string;
+  target: RouteModelRef | undefined;
+}): SwapNotice | null {
+  if (input.target?.kind !== "provider") {
+    return null;
+  }
+  const servedClass = shelfClassForTarget(input.target);
+  if (!servedClass) {
+    return null;
+  }
+  return recordStepDownSuccess({
+    credentialLabel: input.credentialLabel,
+    hadRequestedClassFailure: input.hadRequestedClassFailure,
+    model: input.target.model,
+    provider: input.target.provider.name ?? "",
+    providerIdentity: providerIdentityName(input.target.provider),
+    requestedModel: input.requestedModel,
+    servedClass
+  });
+}
 
 export {
   liftToolResultImages,

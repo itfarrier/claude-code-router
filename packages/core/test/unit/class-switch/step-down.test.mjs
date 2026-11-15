@@ -11,7 +11,7 @@ import { recordClassRefusal, resetClassSwitchBenchForTest } from "@ccr/core/clas
 import { writeShelfSnapshot } from "@ccr/core/class-switch/catalog.ts";
 import { clearSwapNotice, recordStepDownSuccess, recordSwapNotice, readSwapNotice } from "@ccr/core/class-switch/notice.ts";
 import { setThinShareCounter } from "@ccr/core/class-switch/plan.ts";
-import { getSwapNotice } from "@ccr/core/class-switch/seam.ts";
+import { getSwapNotice, recordStepDownSuccessFromTarget } from "@ccr/core/class-switch/seam.ts";
 import { ClaudeCodeRouterPlugin } from "@ccr/core/gateway/claude-code-router-plugin.ts";
 import { GatewayRequestPipeline } from "@ccr/core/gateway/request/pipeline.ts";
 import { closeRequestLogRuntime, flushRequestLogRuntime, requestLogRuntime } from "@ccr/core/observability/request-log-store.ts";
@@ -833,11 +833,10 @@ test("an actual step-down success records the reason safeguards and route fields
       const target = plan.attempts[0].target;
       assert.ok(target);
 
-      const notice = recordStepDownSuccess({
+      const notice = recordStepDownSuccessFromTarget({
         credentialLabel: "cred-sonnet",
         hadRequestedClassFailure: false,
         requestedModel: REQUESTED_MODEL,
-        servedModel: SERVED_MODEL,
         target
       });
       assert.ok(notice);
@@ -851,11 +850,10 @@ test("an actual step-down success records the reason safeguards and route fields
       assert.equal(Number.isNaN(Date.parse(notice.sinceAt)), false);
 
       // A refusal leg ahead of the success changes the reason phrase.
-      const refusalNotice = recordStepDownSuccess({
+      const refusalNotice = recordStepDownSuccessFromTarget({
         credentialLabel: "cred-sonnet",
         hadRequestedClassFailure: true,
         requestedModel: REQUESTED_MODEL,
-        servedModel: SERVED_MODEL,
         target
       });
       assert.ok(refusalNotice);
@@ -873,11 +871,10 @@ test("an actual Anthropic provider identity turns the safeguards note on", async
       const target = plan.attempts[0].target;
       assert.ok(target);
 
-      const notice = recordStepDownSuccess({
+      const notice = recordStepDownSuccessFromTarget({
         credentialLabel: "cred-sonnet",
         hadRequestedClassFailure: false,
         requestedModel: REQUESTED_MODEL,
-        servedModel: "AnthropicShim/sonnet-live",
         target
       });
       assert.ok(notice);
@@ -898,21 +895,19 @@ test("same-class and non-provider successes record nothing", async () => {
       assert.ok(requestedTarget);
 
       assert.equal(
-        recordStepDownSuccess({
+        recordStepDownSuccessFromTarget({
           credentialLabel: "cred-opus",
           hadRequestedClassFailure: false,
           requestedModel: REQUESTED_MODEL,
-          servedModel: "OpusP/opus-model",
           target: requestedTarget
         }),
         null
       );
       assert.equal(
-        recordStepDownSuccess({
+        recordStepDownSuccessFromTarget({
           credentialLabel: "cred-sonnet",
           hadRequestedClassFailure: false,
           requestedModel: REQUESTED_MODEL,
-          servedModel: SERVED_MODEL,
           target: undefined
         }),
         null
@@ -940,5 +935,39 @@ test("recorded notices never carry the credential secret or request text", async
       "servedClass",
       "sinceAt"
     ]);
+  });
+});
+
+test("the notice boundary input is scalars-only, so provider secrets have no path in", async () => {
+  await withStepDownGateway(shelf(), async () => {
+    // The notice-level API takes derived scalars only; a provider config
+    // object carrying credential secrets is not part of its input shape.
+    const scalars = {
+      credentialLabel: "cred:sonnet",
+      hadRequestedClassFailure: false,
+      model: "sonnet-live",
+      provider: "SecretProvider",
+      providerIdentity: "openai",
+      requestedModel: REQUESTED_MODEL,
+      servedClass: "sonnet"
+    };
+    assert.ok(Object.values(scalars).every((value) => typeof value !== "object"));
+    const inputJson = JSON.stringify(scalars);
+    assert.doesNotMatch(inputJson, new RegExp(FIXTURE_SECRET.replaceAll("-", "\\-")));
+
+    const notice = recordStepDownSuccess(scalars);
+    assert.ok(notice);
+    assert.equal(notice.provider, "SecretProvider");
+    assert.equal(notice.model, "sonnet-live");
+    assert.equal(notice.safeguardsApplies, false);
+    assert.doesNotMatch(JSON.stringify(notice), new RegExp(FIXTURE_SECRET.replaceAll("-", "\\-")));
+
+    // The Anthropic identity scalar decides the safeguards fact.
+    const anthropicNotice = recordStepDownSuccess({
+      ...scalars,
+      providerIdentity: "anthropic"
+    });
+    assert.ok(anthropicNotice);
+    assert.equal(anthropicNotice.safeguardsApplies, true);
   });
 });
