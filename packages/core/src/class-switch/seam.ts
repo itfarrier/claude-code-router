@@ -196,6 +196,14 @@ export function stop(): void {
 
 export { recordClassRefusal } from "@ccr/core/class-switch/bench";
 
+// RED phase: the parent-facing notice seam. notice.ts holds compiling stubs
+// until the GREEN task implements the record and the live-again reconciliation.
+export {
+  clearSwapNotice,
+  readSwapNotice as getSwapNotice,
+  recordStepDownSuccess
+} from "@ccr/core/class-switch/notice";
+
 export {
   liftToolResultImages,
   rememberedCredential,
