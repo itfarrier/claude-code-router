@@ -1567,7 +1567,14 @@ function stepDownClassForModel(value: string | undefined): SwapNoticeClass | und
   if (!value) {
     return undefined;
   }
-  const model = stepDownRouteModelName(value);
+  // Claude App gateway route ids ("anthropic/claude-ccr-h<hex>" and legacy
+  // "claude-ccr7-h<hex>" variants) encode the target model as hex. Core
+  // decodes them in parseClassRequest, so an actual encoded-route swap must
+  // derive its class from the decoded model — the literal route id carries
+  // no class token. The core module is not part of the renderer bundle, so
+  // the decode is local and pinned by the component fixtures.
+  const decoded = decodeStepDownRouteId(value);
+  const model = stepDownRouteModelName(decoded ?? value);
   if (!model) {
     return undefined;
   }
@@ -1580,6 +1587,25 @@ function stepDownClassForModel(value: string | undefined): SwapNoticeClass | und
     }
   }
   return undefined;
+}
+
+function decodeStepDownRouteId(value: string): string | undefined {
+  const normalized = value.replace(/\[1m\]$/i, "").toLowerCase();
+  const match = /^anthropic\/claude-ccr(?:\d+)?-h([0-9a-f]+)$/.exec(normalized);
+  const encoded = match?.[1];
+  if (!encoded || encoded.length % 2 !== 0) {
+    return undefined;
+  }
+  const bytes = new Uint8Array(encoded.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) {
+    const byte = Number.parseInt(encoded.slice(index * 2, index * 2 + 2), 16);
+    if (Number.isNaN(byte)) {
+      return undefined;
+    }
+    bytes[index] = byte;
+  }
+  const decoded = new TextDecoder().decode(bytes).trim();
+  return decoded || undefined;
 }
 
 function capitalizeStepDownClass(value: SwapNoticeClass): string {

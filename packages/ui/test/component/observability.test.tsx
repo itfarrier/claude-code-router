@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import test from "node:test";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -677,6 +678,26 @@ test("safeguards follow the configured provider identity, not the display name",
   // An unresolved display name stays conservative and shows the sentence.
   const unresolvedHtml = expandedDetailsMarkup({ ...stepDownRequestLogEntry, provider: "GhostProvider" }, "en", providerFixtures);
   assert.match(unresolvedHtml, /Auto mode will not receive Anthropic safeguards from this non-Anthropic provider\./);
+});
+
+test("encoded Claude App route ids render the same SD surfaces", () => {
+  const hex = Buffer.from("claude-opus-4-6", "utf8").toString("hex");
+  const encodedEntries: RequestLogEntry[] = [
+    { ...stepDownRequestLogEntry, requestedModel: `anthropic/claude-ccr-h${hex}` },
+    { ...stepDownRequestLogEntry, requestedModel: `anthropic/claude-ccr7-h${hex}` },
+    { ...stepDownRequestLogEntry, requestedModel: `anthropic/claude-ccr-h${hex}[1m]` }
+  ];
+
+  const listHtml = logsViewMarkup(encodedEntries);
+  // Three affected rows × two row variants (desktop row + mobile card).
+  assert.equal((listHtml.match(/>SD</g) ?? []).length, 6);
+  assert.equal((listHtml.match(/title="Step-down: requested Opus, served Sonnet"/g) ?? []).length, 6);
+
+  const expandedHtml = expandedDetailsMarkup(encodedEntries[0]);
+  assert.match(expandedHtml, /Step-down notice/);
+  assert.match(expandedHtml, />Opus</);
+  assert.match(expandedHtml, />Sonnet</);
+  assert.match(expandedHtml, /no live Opus triple/);
 });
 
 test("ordinary model-chain fallbacks without paired headers render no SD surfaces", () => {
