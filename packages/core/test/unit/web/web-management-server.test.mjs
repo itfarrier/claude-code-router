@@ -141,76 +141,6 @@ test("#1835 getConfig and saveConfig redact provider credentials without overwri
   } finally { await runtime.close(); }
 });
 
-test("authenticated web RPC returns the current swap notice", async () => {
-  const { startWebManagementServer } = await import("@ccr/core/web/management-server.ts");
-  const { clearSwapNotice, recordSwapNotice } = await import("@ccr/core/class-switch/notice.ts");
-  const authToken = "test-web-auth-token";
-  const swapNotice = {
-    credentialLabel: "cred:sonnet",
-    model: "sonnet-live",
-    provider: "SonnetProvider",
-    reason: "no live Opus triple",
-    requestedClass: "opus",
-    safeguardsApplies: false,
-    servedClass: "sonnet",
-    sinceAt: "2026-11-15T10:00:00.000Z"
-  };
-  const runtime = await startWebManagementServer({
-    authToken,
-    host: "127.0.0.1",
-    port: 0,
-    startGateway: false
-  });
-  try {
-    recordSwapNotice(swapNotice);
-    const endpoint = new URL("/api/ccr/rpc", runtime.url);
-    const populated = await fetch(endpoint, {
-      body: JSON.stringify({ args: [], method: "getSwapNotice" }),
-      headers: {
-        "content-type": "application/json",
-        "x-ccr-web-auth": authToken
-      },
-      method: "POST"
-    });
-    const populatedPayload = await populated.json();
-
-    assert.equal(populated.status, 200);
-    assert.equal(populatedPayload.ok, true);
-    assert.deepEqual(populatedPayload.value, swapNotice);
-
-    const unauthorized = await fetch(endpoint, {
-      body: JSON.stringify({ args: [], method: "getSwapNotice" }),
-      headers: {
-        "content-type": "application/json",
-        "x-ccr-web-auth": "wrong-token"
-      },
-      method: "POST"
-    });
-    const unauthorizedPayload = await unauthorized.json();
-
-    assert.equal(unauthorized.status, 401);
-    assert.equal(unauthorizedPayload.ok, false);
-
-    clearSwapNotice();
-    const cleared = await fetch(endpoint, {
-      body: JSON.stringify({ args: [], method: "getSwapNotice" }),
-      headers: {
-        "content-type": "application/json",
-        "x-ccr-web-auth": authToken
-      },
-      method: "POST"
-    });
-    const clearedPayload = await cleared.json();
-
-    assert.equal(cleared.status, 200);
-    assert.equal(clearedPayload.ok, true);
-    assert.equal(clearedPayload.value, null);
-  } finally {
-    clearSwapNotice();
-    await runtime.close();
-  }
-});
-
 test("startGateway reuses an already healthy CCR gateway on the configured port", async () => {
   const { loadAppConfig, saveAppConfig } = await import("@ccr/core/config/config.ts");
   const { gatewayRuntimeConfigRevision } = await import("@ccr/core/gateway/runtime-config-control.ts");
@@ -390,6 +320,80 @@ test("#1951 recovery preserves edits to a newly created Claude file and reports 
       } else assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { env: { USER_EDIT: "keep" } });
     }
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+// Runs after the startGateway case: this test's notice read loads (and on a
+// fresh store persists) the app config, and the startGateway case above saves
+// a revisionless createDefaultAppConfig() that only succeeds against a
+// not-yet-persisted config row.
+test("authenticated web RPC returns the current swap notice", async () => {
+  const { startWebManagementServer } = await import("@ccr/core/web/management-server.ts");
+  const { clearSwapNotice, recordSwapNotice } = await import("@ccr/core/class-switch/notice.ts");
+  const authToken = "test-web-auth-token";
+  const swapNotice = {
+    credentialLabel: "cred:sonnet",
+    model: "sonnet-live",
+    provider: "SonnetProvider",
+    reason: "no live Opus triple",
+    requestedClass: "opus",
+    safeguardsApplies: false,
+    servedClass: "sonnet",
+    sinceAt: "2026-11-15T10:00:00.000Z"
+  };
+  const runtime = await startWebManagementServer({
+    authToken,
+    host: "127.0.0.1",
+    port: 0,
+    startGateway: false
+  });
+  try {
+    recordSwapNotice(swapNotice);
+    const endpoint = new URL("/api/ccr/rpc", runtime.url);
+    const populated = await fetch(endpoint, {
+      body: JSON.stringify({ args: [], method: "getSwapNotice" }),
+      headers: {
+        "content-type": "application/json",
+        "x-ccr-web-auth": authToken
+      },
+      method: "POST"
+    });
+    const populatedPayload = await populated.json();
+
+    assert.equal(populated.status, 200);
+    assert.equal(populatedPayload.ok, true);
+    assert.deepEqual(populatedPayload.value, swapNotice);
+
+    const unauthorized = await fetch(endpoint, {
+      body: JSON.stringify({ args: [], method: "getSwapNotice" }),
+      headers: {
+        "content-type": "application/json",
+        "x-ccr-web-auth": "wrong-token"
+      },
+      method: "POST"
+    });
+    const unauthorizedPayload = await unauthorized.json();
+
+    assert.equal(unauthorized.status, 401);
+    assert.equal(unauthorizedPayload.ok, false);
+
+    clearSwapNotice();
+    const cleared = await fetch(endpoint, {
+      body: JSON.stringify({ args: [], method: "getSwapNotice" }),
+      headers: {
+        "content-type": "application/json",
+        "x-ccr-web-auth": authToken
+      },
+      method: "POST"
+    });
+    const clearedPayload = await cleared.json();
+
+    assert.equal(cleared.status, 200);
+    assert.equal(clearedPayload.ok, true);
+    assert.equal(clearedPayload.value, null);
+  } finally {
+    clearSwapNotice();
+    await runtime.close();
+  }
 });
 
 async function rpc(baseUrl, authToken, method, args = []) {

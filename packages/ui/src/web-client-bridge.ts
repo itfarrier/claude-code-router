@@ -137,6 +137,7 @@ const webClientBridge: CcrApi = {
   getRequestLogDetail: (request) => rpc("getRequestLogDetail", [request]) as ReturnType<CcrApi["getRequestLogDetail"]>,
   getRequestLogBodyChunk: (request) => rpc("getRequestLogBodyChunk", [request]) as ReturnType<CcrApi["getRequestLogBodyChunk"]>,
   getRequestLogs: (filter) => rpc("getRequestLogs", [filter]) as ReturnType<CcrApi["getRequestLogs"]>,
+  getSwapNotice: () => rpc("getSwapNotice") as ReturnType<CcrApi["getSwapNotice"]>,
   getUpdateStatus: () => rpc("getUpdateStatus") as ReturnType<CcrApi["getUpdateStatus"]>,
   getUsageStats: (range, filter) => rpc("getUsageStats", [range, filter]) as ReturnType<CcrApi["getUsageStats"]>,
   importLocalAgentProvider: (request) => rpc("importLocalAgentProvider", [request]) as ReturnType<CcrApi["importLocalAgentProvider"]>,

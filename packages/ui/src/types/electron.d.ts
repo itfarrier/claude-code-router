@@ -82,6 +82,7 @@ import type {
   RouteScriptTestResult,
   RouteScriptValidationRequest,
   RouteScriptValidationResult,
+  SwapNotice,
   UsageStatsFilter,
   UsageStatsRange,
   UsageStatsResetResult,
@@ -127,6 +128,7 @@ declare global {
       getRequestLogDetail: (request: RequestLogDetailRequest) => Promise<RequestLogEntry | undefined>;
       getRequestLogBodyChunk: (request: RequestLogBodyChunkRequest) => Promise<RequestLogBodyChunk | undefined>;
       getRequestLogs: (filter?: RequestLogListFilter) => Promise<RequestLogPage>;
+      getSwapNotice: () => Promise<SwapNotice | null>;
       getUpdateStatus: () => Promise<AppUpdateStatus>;
       getUsageStats: (range?: UsageStatsRange, filter?: UsageStatsFilter) => Promise<UsageStatsSnapshot>;
       installProxyCertificate: () => Promise<ProxyCertificateInstallResult>;
