@@ -28,7 +28,11 @@ import {
 import { isCodexResponsesCompactPath, type ContextArchiveResponseMode } from "@ccr/core/gateway/context-archive/protocol";
 import { adaptRouteRequestBody, restoreRouteRequestBody } from "@ccr/core/routing/protocol-adapter";
 import { reserveApiKeyLimits } from "@ccr/core/gateway/auth/api-key-authorizer";
-import { isClassAttempt, recordStepDownSuccessFromTarget } from "@ccr/core/class-switch/seam";
+import {
+  hasRequestedClassFailure,
+  isClassAttempt,
+  recordStepDownSuccessFromTarget
+} from "@ccr/core/class-switch/seam";
 import { recordProviderCredentialOutcome } from "@ccr/core/providers/credential-pool";
 import { codexApplyPatchBridgeResponseStream, prepareCodexApplyPatchBridgeRequest } from "@ccr/core/gateway/features/codex-patch-bridge";
 import { codexMultiAgentBridgeResponseStream, prepareCodexMultiAgentBridgeRequest } from "@ccr/core/gateway/features/codex-multi-agent-bridge";
@@ -925,7 +929,7 @@ export class GatewayRequestPipeline {
         // responseHeaders below.
         const swapNotice = recordStepDownSuccessFromTarget({
           credentialLabel: upstreamResult.attempt.credentialIds?.[0],
-          hadRequestedClassFailure: upstreamResult.failedAttempts.length > 0,
+          hadRequestedClassFailure: hasRequestedClassFailure(upstreamResult.failedAttempts, requestedModel),
           requestedModel,
           target: upstreamResult.attempt.target
         });

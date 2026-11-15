@@ -241,6 +241,8 @@ export function recordStepDownSuccessFromTarget(input: {
   });
 }
 
+export { hasRequestedClassFailure } from "@ccr/core/class-switch/plan";
+
 export {
   liftToolResultImages,
   rememberedCredential,

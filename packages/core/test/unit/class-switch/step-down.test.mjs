@@ -233,6 +233,7 @@ async function runStepDownPipeline(requestModel, options = {}) {
   const originalFetch = globalThis.fetch;
   const originalWarn = console.warn;
   const fetchCalls = [];
+  const upstreamStatusQueue = [...(options.upstreamStatuses ?? [])];
   let upstreamBody;
   let upstreamHeaders;
   let failure;
@@ -243,15 +244,22 @@ async function runStepDownPipeline(requestModel, options = {}) {
     originalWarn(message, ...args);
   };
   globalThis.fetch = async (_input, init) => {
+    const url = String(_input);
+    let status = options.upstreamStatus ?? 200;
+    if (options.upstreamStatuses && url.endsWith("/v1/messages")) {
+      status = upstreamStatusQueue.length > 1 ? upstreamStatusQueue.shift() : (upstreamStatusQueue[0] ?? 200);
+    }
     upstreamBody = JSON.parse(String(init?.body));
     upstreamHeaders = Object.fromEntries(new Headers(init?.headers).entries());
-    fetchCalls.push({ body: upstreamBody, headers: upstreamHeaders, url: String(_input) });
-    return new Response(sseBody(options.upstreamModel ?? "sonnet-live"), {
-      headers: {
-        "content-type": "text/event-stream; charset=utf-8",
-        ...(options.upstreamResponseHeaders ?? {})
-      },
-      status: options.upstreamStatus ?? 200
+    fetchCalls.push({ body: upstreamBody, headers: upstreamHeaders, url });
+    return new Response(status === 200 ? sseBody(options.upstreamModel ?? "sonnet-live") : "{}", {
+      headers: status === 200
+        ? {
+            "content-type": "text/event-stream; charset=utf-8",
+            ...(options.upstreamResponseHeaders ?? {})
+          }
+        : { "content-type": "application/json" },
+      status
     });
   };
 
@@ -494,6 +502,58 @@ test("an all-empty shelf set errors the request without a provider success", asy
     // walk must never start when every class is empty.
     assert.equal(result.fetchCalls.some((call) => call.url.endsWith("/v1/messages")), false);
   });
+});
+
+test("a lower-class refusal does not claim the requested class was refused", async () => {
+  // No Opus rows: the only failed attempt belongs to the Sonnet shelf, so the
+  // reason must stay "no live Opus triple" even though a Sonnet leg failed
+  // before the later Sonnet success.
+  await withStepDownGateway(
+    shelf({ sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }] }),
+    async () => {
+      const result = await runStepDownPipeline(REQUESTED_MODEL, {
+        providers: [twinSonnetSpec()],
+        upstreamStatuses: [429, 200]
+      });
+      assert.equal(result.failure, undefined);
+      assert.equal(result.response.statusCode, 200);
+      assert.equal(result.response.headers["x-ccr-requested-model"], REQUESTED_MODEL);
+      assert.equal(result.response.headers["x-ccr-served-model"], SERVED_MODEL);
+
+      const notice = await getSwapNotice({ modelRegistry: sonnetRegistry() });
+      assert.ok(notice);
+      assert.equal(notice.reason, "no live Opus triple");
+      assert.equal(notice.requestedClass, "opus");
+      assert.equal(notice.servedClass, "sonnet");
+    }
+  );
+});
+
+test("a requested-class refusal still names the refusal reason", async () => {
+  await withStepDownGateway(
+    shelf({
+      opus: [{ model: "alpha/model-a", provider: "BenchProvider", score: 80 }],
+      sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }]
+    }),
+    async () => {
+      const result = await runStepDownPipeline(REQUESTED_MODEL, {
+        providers: [
+          providerSpec("BenchProvider", ["alpha/model-a"], { credentials: [{ api_key: "sk-bench", id: "cred:bench" }] }),
+          sonnetSpec()
+        ],
+        upstreamStatuses: [429, 200]
+      });
+      assert.equal(result.failure, undefined);
+      assert.equal(result.response.statusCode, 200);
+
+      const notice = await getSwapNotice({ modelRegistry: registryFrom([
+        providerSpec("BenchProvider", ["alpha/model-a"], { credentials: [{ api_key: "sk-bench", id: "cred:bench" }] }),
+        sonnetSpec()
+      ]) });
+      assert.ok(notice);
+      assert.equal(notice.reason, "all Opus attempts refused before first token");
+    }
+  );
 });
 
 test("a tool turn served by the remembered triple keeps the step-down notice", async () => {
