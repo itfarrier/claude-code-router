@@ -6,23 +6,23 @@
     {
       "number": "1",
       "name": "Shelves",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "2",
       "name": "Live choice",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "3",
       "name": "Step-down",
-      "status": "pending"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "$gsd-progress --next",
-    "label": "Advance to the next step (plan phase 1)",
-    "reason": "Phase 1 of 3 — needs a plan"
+    "command": "$gsd-progress",
+    "label": "Show progress",
+    "reason": "Unsure of state — showing progress"
   },
-  "updated_at": "2026-11-14T13:50:34.493Z"
+  "updated_at": "2026-11-15T14:14:50.469Z"
 }
