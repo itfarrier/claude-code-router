@@ -29,6 +29,9 @@ import { GatewayRequestPipeline } from "@ccr/core/gateway/request/pipeline";
 import { GatewayHttpRequestHandler } from "@ccr/core/gateway/http/request-handler";
 import { gatewayRuntimeConfigRevision } from "@ccr/core/gateway/runtime-config-control";
 import { shouldRestartGatewayForRuntimeConfigChange } from "@ccr/core/gateway/runtime-change";
+import { readExternalRuntimeSwapNotice } from "@ccr/core/class-switch/notice-runtime";
+import { getSwapNotice } from "@ccr/core/class-switch/seam";
+import type { SwapNotice } from "@ccr/core/contracts/app";
 import { RouteScriptRuntime } from "@ccr/core/routing/route-script-runtime";
 import { buildRouteScriptInput } from "@ccr/core/routing/route-script-context";
 import { compileRouterConfig } from "@ccr/core/routing/config-compiler";
@@ -709,6 +712,22 @@ class GatewayService {
       networkEndpoints: gatewayNetworkEndpoints(config.gateway.host, config.gateway.port),
       state: "running"
     };
+  }
+
+  // The notice read for every UI surface (web RPC and Electron IPC). When the
+  // gateway is managed externally, requests execute in another process's
+  // pipeline, so the executing runtime is the notice source of truth: read its
+  // record through the authenticated runtime channel and mirror it into the
+  // local projection. Otherwise the local record is the only one there is.
+  async readSwapNotice(): Promise<SwapNotice | null> {
+    const status = this.status;
+    if (status.state === "running" && status.gatewayManagedExternally && status.endpoint) {
+      return readExternalRuntimeSwapNotice({
+        apiKey: this.externalGatewayApiKey,
+        endpoint: status.endpoint
+      });
+    }
+    return getSwapNotice();
   }
 
 }

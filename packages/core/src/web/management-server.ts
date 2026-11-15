@@ -35,7 +35,7 @@ import { getProviderCatalogModels } from "@ccr/core/providers/model-catalog";
 import { getOpenRouterProviderCatalog } from "@ccr/core/providers/openrouter-provider-catalog";
 import { getProviderPresets } from "@ccr/core/providers/presets/index";
 import { checkGatewayProviderConnectivity, probeGatewayProvider, probeGatewayProviderCandidates } from "@ccr/core/providers/probe";
-import { getSwapNotice, start as startClassSwitch, stop as stopClassSwitch } from "@ccr/core/class-switch/seam";
+import { start as startClassSwitch, stop as stopClassSwitch } from "@ccr/core/class-switch/seam";
 import { stopProviderModelAutoRefreshService, syncProviderModelAutoRefreshService } from "@ccr/core/providers/model-auto-refresh";
 import { applyProfileConfig, recoverGlobalAgentProfile } from "@ccr/core/profiles/service";
 import { getProfileOpenCommand, getProfileRuntimeStatus, openProfileFromCcr, stopProfileFromCcr } from "@ccr/core/profiles/launch-service";
@@ -364,7 +364,7 @@ const rpcHandlers: Record<string, RpcHandler> = {
   getRequestLogDetail: (request) => getRequestLogDetail(request as RequestLogDetailRequest),
   getRequestLogBodyChunk: (request) => getRequestLogBodyChunk(request as RequestLogBodyChunkRequest),
   getRequestLogs: (filter) => getRequestLogs(filter as RequestLogListFilter | undefined),
-  getSwapNotice: () => getSwapNotice(),
+  getSwapNotice: () => gatewayService.readSwapNotice(),
   getUpdateStatus: () => unsupportedUpdateStatus,
   getUsageStats: (range, filter) => getUsageStats(range as UsageStatsRange | undefined, filter as UsageStatsFilter | undefined),
   importLocalAgentProvider: (request) => importLocalAgentProvider(request as LocalAgentProviderImportRequest),

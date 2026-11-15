@@ -266,6 +266,23 @@ export function resolveRouterPluginEntry(): string {
   ].find((candidate) => existsSync(candidate)) ?? pathJoin(__dirname, "router-plugin.js");
 }
 
+// The class-switch swap-notice runtime plugin (CR-05): compiled next to the
+// router plugin with the same candidate layout, so the adopted runtime loads
+// the same fork-owned module.
+export function resolveClassSwitchNoticeRuntimeEntry(): string {
+  const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
+  return [
+    pathJoin(__dirname, "notice-runtime.js"),
+    pathJoin(process.cwd(), ".test-dist", "core", "runtime", "notice-runtime.js"),
+    ...(resourcesPath
+      ? [
+          pathJoin(resourcesPath, "app.asar", "dist", "main", "notice-runtime.js"),
+          pathJoin(resourcesPath, "app", "dist", "main", "notice-runtime.js")
+        ]
+      : [])
+  ].find((candidate) => existsSync(candidate)) ?? pathJoin(__dirname, "notice-runtime.js");
+}
+
 export function gatewayRuntimeSupportsRouterPlugin(): boolean {
   const override = process.env[gatewayEntryOverrideEnv]?.trim();
   if (override) {

@@ -39,7 +39,7 @@ import { getProviderCatalogModels } from "@ccr/core/providers/model-catalog";
 import { getOpenRouterProviderCatalog } from "@ccr/core/providers/openrouter-provider-catalog";
 import { getProviderPresets } from "@ccr/core/providers/presets/index";
 import { checkGatewayProviderConnectivity, probeGatewayProvider, probeGatewayProviderCandidates } from "@ccr/core/providers/probe";
-import { getSwapNotice, start as startClassSwitch } from "@ccr/core/class-switch/seam";
+import { start as startClassSwitch } from "@ccr/core/class-switch/seam";
 import { syncProviderModelAutoRefreshService } from "@ccr/core/providers/model-auto-refresh";
 import { applyProfileConfig, recoverGlobalAgentProfile } from "@ccr/core/profiles/service";
 import { desktopCliCommandName, getProfileOpenCommand, getProfileRuntimeStatus, openProfileFromCcr, stopProfileFromCcr } from "@ccr/core/profiles/launch-service";
@@ -126,7 +126,7 @@ ipcMain.handle(IPC_CHANNELS.appGetPluginMarketplace, () => getPluginMarketplace(
 ipcMain.handle(IPC_CHANNELS.appGetRequestLogDetail, (_event, request) => getRequestLogDetail(request));
 ipcMain.handle(IPC_CHANNELS.appGetRequestLogBodyChunk, (_event, request) => getRequestLogBodyChunk(request));
 ipcMain.handle(IPC_CHANNELS.appGetRequestLogs, (_event, filter?: RequestLogListFilter) => getRequestLogs(filter));
-ipcMain.handle(IPC_CHANNELS.appGetSwapNotice, () => getSwapNotice());
+ipcMain.handle(IPC_CHANNELS.appGetSwapNotice, () => gatewayService.readSwapNotice());
 ipcMain.handle(IPC_CHANNELS.appGetUpdateStatus, () => appUpdateService.getStatus());
 ipcMain.handle(IPC_CHANNELS.appGetUsageStats, (_event, range?: UsageStatsRange, filter?: UsageStatsFilter) => getUsageStats(range, filter));
 ipcMain.handle(IPC_CHANNELS.appFetchProviderManifest, (_event, request: ProviderManifestFetchRequest) => fetchProviderManifest(request));
