@@ -24,6 +24,7 @@ export const IPC_CHANNELS = {
   appGetRequestLogDetail: "ccr:app:get-request-log-detail",
   appGetRequestLogBodyChunk: "ccr:app:get-request-log-body-chunk",
   appGetRequestLogs: "ccr:app:get-request-logs",
+  appGetSwapNotice: "ccr:app:get-swap-notice",
   appGetUpdateStatus: "ccr:app:get-update-status",
   appGetUsageStats: "ccr:app:get-usage-stats",
   appFetchProviderManifest: "ccr:app:fetch-provider-manifest",
