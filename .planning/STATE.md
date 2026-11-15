@@ -1,20 +1,20 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.0
-current_phase: 02
-current_phase_name: Live choice
-status: verifying
-stopped_at: Phase 1 complete, ready to verify Phase 02
-last_updated: "2026-11-14T23:34:27.288Z"
+current_phase: 3
+current_phase_name: Step-down
+status: planning
+stopped_at: Phase 2 complete, ready to plan Phase 3
+last_updated: "2026-11-15T06:27:54.567Z"
 last_activity: 2026-11-15
-last_activity_desc: Phase 1 complete, transitioned to Phase 02
-state_head: 784b6f9fddb9b5b08363d794f3c121bc0fc3b954
+last_activity_desc: Phase 2 complete, transitioned to Phase 3
+state_head: 220020e7a31e95d996d4a2b6a92f915b9a98f6ba
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
   completed_plans: 7
-  percent: 33
+  percent: 67
 milestone_name: Automatic class switch
 ---
 
@@ -25,21 +25,21 @@ milestone_name: Automatic class switch
 See: .planning/PROJECT.md (updated 2026-11-15)
 
 **Core value:** Claude Code orders a class. CCR serves the strongest live model in that class, and Claude does not fail when that class is empty.
-**Current focus:** Phase 02 — Live choice
+**Current focus:** Phase 03 — Step-down
 
 ## Current Position
 
-Phase: 02 — Live choice
-Plan: 4
-Status: Phase complete — ready for verification
-Last activity: 2026-11-15 — Phase 1 complete, transitioned to Phase 02
+Phase: 3 — Step-down
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-11-15 — Phase 2 complete, transitioned to Phase 3
 
-Progress: [███░░░░░░░] 33%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 9
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -51,6 +51,7 @@ Progress: [███░░░░░░░] 33%
 | 2. Live choice | 0 | 4 | — |
 | 3. Step-down | 0 | TBD | — |
 | 1 | 3 | - | - |
+| 2 | 4 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: —
@@ -96,7 +97,7 @@ None yet.
 
 ### Blockers/Concerns
 
-Resolved 2026-11-15: 01-VERIFICATION.md human_needed deferral — user validated all 3 judgment-tier items in autonomous mode; phase 1 verified (33/33) and marked complete. Accepted code-review deferrals remain recorded in 01-REVIEW-DISPOSITION.md (WR-04, IN-01 — open, carried to milestone audit).
+Resolved 2026-11-15: Phase 1 + Phase 2 both verified and complete. Phase 2's 6 critical + 5 warning review findings were fixed by the converged --auto fix loop (13 fixes, final review clean); 2 loop-introduced warnings (WR-06, WR-07) fixed and re-verified. Accepted code-review deferrals remain recorded: 01-REVIEW-DISPOSITION.md (WR-04, IN-01 — open) and 02-REVIEW-DISPOSITION.md (IN-01 — skipped, info); carried to milestone audit.
 
 ## Deferred Verification
 
@@ -114,7 +115,7 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-11-14T23:33:33Z
-Stopped at: Phase 1 complete and verified; Phase 2 next (verification pending)
+Last session: 2026-11-15T01:20:00Z
+Stopped at: Phase 2 complete and verified; Phase 3 (Step-down) next — not started
 Resume file: None
-Phase 2 plans: .planning/phases/02-live-choice/02-01-PLAN.md through 02-04-PLAN.md. Phase 1 verified and complete.
+Phase 3 plans: none yet. Phases 1-2 verified and complete.
