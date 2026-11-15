@@ -504,6 +504,37 @@ test("an all-empty shelf set errors the request without a provider success", asy
   });
 });
 
+test("the kill switch keeps upstream supplied step-down headers untouched", async () => {
+  // CCR_CLASS_SWITCH=0 must keep exact parent behavior: an upstream's own
+  // disclosure headers are forwarded unchanged and no notice is recorded.
+  await withStepDownGateway(
+    shelf({ sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }] }),
+    async () => {
+      const previous = process.env.CCR_CLASS_SWITCH;
+      try {
+        process.env.CCR_CLASS_SWITCH = "0";
+        const result = await runStepDownPipeline(REQUESTED_MODEL, {
+          upstreamResponseHeaders: {
+            "x-ccr-requested-model": "upstream-requested",
+            "x-ccr-served-model": "upstream-served"
+          }
+        });
+        assert.equal(result.failure, undefined);
+        assert.equal(result.response.statusCode, 200);
+        assert.equal(result.response.headers["x-ccr-requested-model"], "upstream-requested");
+        assert.equal(result.response.headers["x-ccr-served-model"], "upstream-served");
+        assert.equal(await getSwapNotice({ modelRegistry: sonnetRegistry() }), null);
+      } finally {
+        if (previous === undefined) {
+          delete process.env.CCR_CLASS_SWITCH;
+        } else {
+          process.env.CCR_CLASS_SWITCH = previous;
+        }
+      }
+    }
+  );
+});
+
 test("a lower-class refusal does not claim the requested class was refused", async () => {
   // No Opus rows: the only failed attempt belongs to the Sonnet shelf, so the
   // reason must stay "no live Opus triple" even though a Sonnet leg failed

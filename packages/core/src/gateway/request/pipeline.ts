@@ -871,11 +871,16 @@ export class GatewayRequestPipeline {
         this.config
       );
       pluginResponseHeaders.forEach((value, name) => responseHeaders.set(name, value));
-      // An upstream cannot forge the step-down disclosure headers: they are
-      // removed from every response here and set together only after an actual
-      // lower-class 2xx below.
-      responseHeaders.delete("x-ccr-requested-model");
-      responseHeaders.delete("x-ccr-served-model");
+      // The phase's only header manipulation on the response: strip any
+      // upstream-forged step-down disclosure headers, then set the paired
+      // values together only after an actual recorded lower-class swap. With
+      // the kill switch off the parent behavior forwards upstream headers
+      // unchanged, so nothing is deleted or added here.
+      const classSwitchEnabled = process.env.CCR_CLASS_SWITCH !== "0";
+      if (classSwitchEnabled) {
+        responseHeaders.delete("x-ccr-requested-model");
+        responseHeaders.delete("x-ccr-served-model");
+      }
       const upstreamResponse = upstreamResult.response;
       if (upstreamResponse.ok) {
         finalizeContextArchiveRequest(contextArchiveRecord, {
@@ -933,7 +938,7 @@ export class GatewayRequestPipeline {
         writeRequestLog(clientClosedRequestStatusCode, responseHeaders, "", false, clientDisconnectMessage);
         return;
       }
-      if (upstreamResponse.ok) {
+      if (classSwitchEnabled && upstreamResponse.ok) {
         // An actual lower-class 2xx is the only swap. Same-class and non-class
         // successes record nothing, so no header is set for them either. The
         // call precedes every response.writeHead path and every log read of
