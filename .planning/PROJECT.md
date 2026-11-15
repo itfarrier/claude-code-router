@@ -29,13 +29,13 @@ Claude Code orders a class. CCR serves the strongest live model in that class, a
 - ✓ Claude Code settings are pointed at the gateway on profile apply, CLI start, and config save. The three base URLs are set, Bedrock, Vertex, and Foundry flags are removed, and class env vars come only from profile fields — `packages/core/src/profiles/service.ts`
 - ✓ A Claude class request selects one shelf, including `best`, `opusplan`, and the `[1m]` window filter — Phase 1
 - ✓ New catalog models land on a shelf by score, or stay off the shelf when the rule says so — Phase 1
+- ✓ CCR serves the strongest live triple and retries the next triple before the first token — Phase 2
+- ✓ Failures sit on the bench until the provider's own time, not a hard-coded free-tier limit — Phase 2
+- ✓ The policy sees a small input and returns a parsed triple. A request-shape 400 does not bench the model — Phase 2
 
 ### Active
 
-- [ ] CCR serves the strongest live triple and retries the next triple before the first token
-- [ ] Failures sit on the bench until the provider's own time, not a hard-coded free-tier limit
 - [ ] An empty shelf steps down. Claude gets a success. The user sees one notice
-- [ ] The policy sees a small input and returns a parsed triple. A request-shape 400 does not bench the model
 
 ### Out of Scope
 
@@ -80,8 +80,8 @@ Config mode is `yolo`. Granularity is `coarse`. Phase numbers start at 1 because
 |----------|-----------|---------|
 | Four classes: Fable, Opus, Sonnet, Haiku | They match Claude Code aliases. The user confirmed this split. | ✓ Shipped Phase 1 (shelf matching) |
 | Score weights 0.50 / 0.30 / 0.20 and cuts 62 / 50 / 28 | Locked in the imported chat. Coding index, then agentic index, then intelligence index, from OpenRouter `benchmarks.artificial_analysis`. | ✓ Shipped Phase 1 (catalog scoring) |
-| Dynamic attempt list at the end of `createRouteExecutionPlan`, not a second loop | The parent `fetchUpstreamWithFallback` already walks `attempts`. A class request replaces that list. Other requests keep `off`, `retry`, and `model-chain`. See `.planning/research/FORK-SEAMS.md`. | — Pending |
-| Provider reset time, not a fixed 15-minute probe or a 1-day park | The user rejected fixed probe and park timers. Catalog refresh stays at 10 minutes. | — Pending |
+| Dynamic attempt list at the end of `createRouteExecutionPlan`, not a second loop | The parent `fetchUpstreamWithFallback` already walks `attempts`. A class request replaces that list. Other requests keep `off`, `retry`, and `model-chain`. See `.planning/research/FORK-SEAMS.md`. | ✓ Shipped Phase 2 (live triple walk) |
+| Provider reset time, not a fixed 15-minute probe or a 1-day park | The user rejected fixed probe and park timers. Catalog refresh stays at 10 minutes. | ✓ Shipped Phase 2 (bench clocks) |
 | Stay on this fork, code in `packages/core/src/class-switch/` | A side `CUSTOM_ROUTER_PATH` file cannot rotate tokens or step down after a refusal. Editing the parent loop in place makes every upstream merge a rewrite. | — Pending |
 | Source-chat gaps from chat `c398a042-f199-48a6-afb9-9480889e3f22` are in the v1 requirements | Weight renormalization, tier words, bench scope, an unchecked model ranking below a confirmed one, `safeguards` in the notice, `tool_result` images, and the real `/v1/models` window were only in IMPORTED-DESIGN.md. Phase criteria now say them too. PR #1179 stays superseded by FORK-SEAMS.md. | — Pending |
 | Skip a second research pass | Chat `9cf95ff9-5d84-4b2b-adf4-165be1f6ff9b` is the locked design. | ✓ Good |
@@ -104,4 +104,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-15 after Phase 1*
+*Last updated: 2026-11-15 after Phase 2*
