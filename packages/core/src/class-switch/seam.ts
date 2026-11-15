@@ -11,6 +11,7 @@ import {
   shelfClassForTarget
 } from "@ccr/core/class-switch/plan";
 import { loadAppConfig } from "@ccr/core/config/config";
+import type { RouteTraceObserver } from "@ccr/core/observability/route-trace";
 import {
   attemptsForStepDown,
   liftToolResultImages,
@@ -217,11 +218,19 @@ export {
 // planner's snapshot mapping, model, provider display name, and the provider's
 // Anthropic identity) before calling the notice boundary. Provider config
 // objects and their credential secrets never cross into the notice input.
+//
+// The optional trace observer captures the real swap reason for the request
+// log: only a non-null notice from an actual lower-class success emits exactly
+// one explicitly marked class-switch decision whose reason is the notice's own
+// fixed reason. Null-notice paths (same-class, non-class, exhausted) capture
+// nothing, and the reason is copied from the notice — never recalculated and
+// never taken from provider errors, bodies, or credentials.
 export function recordStepDownSuccessFromTarget(input: {
   credentialLabel?: string;
   hadRequestedClassFailure: boolean;
   requestedModel?: string;
   target: RouteModelRef | undefined;
+  trace?: RouteTraceObserver;
 }): SwapNotice | null {
   if (input.target?.kind !== "provider") {
     return null;
@@ -230,7 +239,7 @@ export function recordStepDownSuccessFromTarget(input: {
   if (!servedClass) {
     return null;
   }
-  return recordStepDownSuccess({
+  const notice = recordStepDownSuccess({
     credentialLabel: input.credentialLabel,
     hadRequestedClassFailure: input.hadRequestedClassFailure,
     model: input.target.model,
@@ -239,6 +248,16 @@ export function recordStepDownSuccessFromTarget(input: {
     requestedModel: input.requestedModel,
     servedClass
   });
+  if (notice) {
+    input.trace?.capture({
+      decision: { reason: notice.reason, source: "class-switch" },
+      kind: "decision",
+      name: "class-switch.step-down",
+      phase: "routing",
+      status: "ok"
+    });
+  }
+  return notice;
 }
 
 export { hasRequestedClassFailure } from "@ccr/core/class-switch/plan";
