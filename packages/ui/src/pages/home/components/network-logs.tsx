@@ -1592,13 +1592,15 @@ function stepDownDetailsForLog(entry: RequestLogEntry, providers?: GatewayProvid
   if (!requestedClass || !servedClass || stepDownClassRank[servedClass] <= stepDownClassRank[requestedClass]) {
     return null;
   }
-  let reason: string | undefined;
-  for (const hop of entry.routeTrace?.hops ?? []) {
-    const hopReason = hop.decision?.reason?.trim();
-    if (hopReason) {
-      reason = hopReason;
-    }
-  }
+  // Only an explicitly class-switch-marked decision carries the step-down
+  // reason. Every real executor plan appends a late fallback.execution-plan
+  // decision whose reason is a generic fallback mode, so the last nonempty
+  // hop reason would surface that instead of the swap reason. No marked
+  // decision → Reason is omitted (the partial-data contract).
+  const classSwitchHop = [...(entry.routeTrace?.hops ?? [])]
+    .reverse()
+    .find((candidate) => candidate.decision?.source === "class-switch" && candidate.decision.reason?.trim());
+  const reason = classSwitchHop?.decision?.reason?.trim();
   const provider = entry.provider.trim() ? entry.provider : undefined;
   // Resolve the request-log provider display name back to its configured
   // provider and apply the same Anthropic-identity predicate core applies to

@@ -589,6 +589,68 @@ const providerFixtures: GatewayProviderConfig[] = [
   { models: ["sonnet-live"], name: "ExplicitType", type: "anthropic" }
 ];
 
+// A production-shaped trace keeps the late fallback.execution-plan decision
+// hop after the class-switch decision; the step-down Reason must select the
+// marked class-switch decision only, never the generic fallback mode text.
+const productionShapedRouteTrace: RequestRouteTrace = {
+  attemptCount: 2,
+  complete: true,
+  hopCount: 3,
+  hops: [
+    {
+      changes: [],
+      decision: { reason: "no live Opus triple", source: "class-switch" },
+      durationMs: 5,
+      kind: "decision",
+      name: "router.policy",
+      phase: "routing",
+      seq: 1,
+      startedOffsetMs: 0,
+      status: "ok"
+    },
+    {
+      attempt: 1,
+      changes: [],
+      durationMs: 115,
+      kind: "attempt",
+      name: "upstream.attempt.prepare",
+      phase: "attempt",
+      seq: 2,
+      startedOffsetMs: 5,
+      status: "ok"
+    },
+    {
+      changes: [],
+      decision: { reason: "fallback:model-chain", source: "execution-plan" },
+      durationMs: 2,
+      kind: "decision",
+      name: "fallback.execution-plan",
+      phase: "planning",
+      seq: 3,
+      startedOffsetMs: 8,
+      status: "ok"
+    }
+  ],
+  truncated: false,
+  version: 2
+};
+
+test("expanded Reason uses the class-switch decision, not the fallback hop", () => {
+  const html = expandedDetailsMarkup({ ...stepDownRequestLogEntry, routeTrace: productionShapedRouteTrace });
+  assert.match(html, /no live Opus triple/);
+  assert.doesNotMatch(html, /fallback:model-chain/);
+
+  // No class-switch decision → Reason is omitted, never replaced by an
+  // arbitrary last hop reason.
+  const unmarkedTrace: RequestRouteTrace = {
+    ...productionShapedRouteTrace,
+    hops: productionShapedRouteTrace.hops.filter((hop) => hop.decision?.source !== "class-switch")
+  };
+  const unmarkedHtml = expandedDetailsMarkup({ ...stepDownRequestLogEntry, routeTrace: unmarkedTrace });
+  assert.doesNotMatch(unmarkedHtml, /Reason/);
+  assert.doesNotMatch(unmarkedHtml, /fallback:model-chain/);
+});
+
 test("safeguards follow the configured provider identity, not the display name", () => {
   const shimEntry = { ...stepDownRequestLogEntry, provider: "AnthropicShim" };
   const shimHtml = expandedDetailsMarkup(shimEntry, "en", providerFixtures);
