@@ -1229,7 +1229,10 @@ test("real step-down request logs persist both exact class-switch reasons", asyn
 
     // Case two: a live Opus row refuses (429) before first token, then the
     // Sonnet row succeeds — the reason must name the requested class.
-    const refusalEntry = await withStepDownGateway(
+    // withStepDownGateway awaits its callback without returning its value, so
+    // the fresh entry is captured into the outer binding from inside.
+    let refusalEntry;
+    await withStepDownGateway(
       shelf({
         opus: [{ model: "alpha/model-a", provider: "BenchProvider", score: 80 }],
         sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }]
@@ -1247,7 +1250,7 @@ test("real step-down request logs persist both exact class-switch reasons", asyn
         assert.equal(refusal.response.statusCode, 200);
         assert.equal(refusal.response.headers["x-ccr-requested-model"], REQUESTED_MODEL);
         assert.equal(refusal.response.headers["x-ccr-served-model"], SERVED_MODEL);
-        return nextFreshStepDownLogEntry();
+        refusalEntry = await nextFreshStepDownLogEntry();
       }
     );
 

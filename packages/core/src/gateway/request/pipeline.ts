@@ -942,12 +942,16 @@ export class GatewayRequestPipeline {
         // An actual lower-class 2xx is the only swap. Same-class and non-class
         // successes record nothing, so no header is set for them either. The
         // call precedes every response.writeHead path and every log read of
-        // responseHeaders below.
+        // responseHeaders below. The existing recorder rides along through
+        // the established seam, so the real swap reason is captured as a
+        // marked class-switch decision before routeTrace.finish finalizes the
+        // request log.
         const swapNotice = recordStepDownSuccessFromTarget({
           credentialLabel: upstreamResult.attempt.credentialIds?.[0],
           hadRequestedClassFailure: hasRequestedClassFailure(upstreamResult.failedAttempts, requestedModel),
           requestedModel,
-          target: upstreamResult.attempt.target
+          target: upstreamResult.attempt.target,
+          trace: routeTrace
         });
         if (swapNotice) {
           responseHeaders.set("x-ccr-requested-model", sanitizeHeaderValue(requestedModel ?? routedModel));

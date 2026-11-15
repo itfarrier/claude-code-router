@@ -13,7 +13,7 @@
   "routeTrace": {
     "attemptCount": 1,
     "complete": true,
-    "hopCount": 8,
+    "hopCount": 9,
     "hops": [
       {
         "changes": [],
@@ -195,6 +195,20 @@
           "model": "SonnetProvider/sonnet-live",
           "provider": "SonnetProvider"
         }
+      },
+      {
+        "changes": [],
+        "decision": {
+          "reason": "no live Opus triple",
+          "source": "class-switch"
+        },
+        "durationMs": 1,
+        "kind": "decision",
+        "name": "class-switch.step-down",
+        "phase": "routing",
+        "seq": 8,
+        "startedOffsetMs": 40,
+        "status": "ok"
       }
     ],
     "truncated": false,
