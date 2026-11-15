@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable, Writable } from "node:stream";
-import test from "node:test";
+import test, { after } from "node:test";
 import { recordClassRefusal, resetClassSwitchBenchForTest } from "@ccr/core/class-switch/bench.ts";
 import { writeShelfSnapshot } from "@ccr/core/class-switch/catalog.ts";
 import { clearSwapNotice, recordStepDownSuccess, recordSwapNotice, readSwapNotice } from "@ccr/core/class-switch/notice.ts";
@@ -11,10 +11,20 @@ import { setThinShareCounter } from "@ccr/core/class-switch/plan.ts";
 import { getSwapNotice } from "@ccr/core/class-switch/seam.ts";
 import { ClaudeCodeRouterPlugin } from "@ccr/core/gateway/claude-code-router-plugin.ts";
 import { GatewayRequestPipeline } from "@ccr/core/gateway/request/pipeline.ts";
-import { flushRequestLogRuntime, requestLogRuntime } from "@ccr/core/observability/request-log-store.ts";
+import { closeRequestLogRuntime, flushRequestLogRuntime, requestLogRuntime } from "@ccr/core/observability/request-log-store.ts";
 import { fetchUpstreamWithFallback } from "@ccr/core/gateway/upstream/executor.ts";
 import { createRouteExecutionPlan } from "@ccr/core/routing/execution-plan.ts";
 import { ModelRegistry } from "@ccr/core/routing/model-registry.ts";
+
+// Compiled tests bundle request-log-store.ts into this test file, so the log
+// writer's worker path must point at the compiled runtime worker (the
+// integration-suite pattern in october-issues-wire.test.mjs).
+requestLogRuntime.options.workerFile = path.resolve(__dirname, "../../runtime/request-log-worker.js");
+
+// Stop the request-log writer thread so the test process can exit.
+after(async () => {
+  await closeRequestLogRuntime(2000).catch(() => undefined);
+});
 
 const REQUESTED_MODEL = "claude-opus-4-6";
 const SERVED_MODEL = "SonnetProvider/sonnet-live";
@@ -221,7 +231,7 @@ async function runStepDownPipeline(requestModel, options = {}) {
   globalThis.fetch = async (_input, init) => {
     upstreamBody = JSON.parse(String(init?.body));
     upstreamHeaders = Object.fromEntries(new Headers(init?.headers).entries());
-    fetchCalls.push({ body: upstreamBody, headers: upstreamHeaders });
+    fetchCalls.push({ body: upstreamBody, headers: upstreamHeaders, url: String(_input) });
     return new Response(sseBody(options.upstreamModel ?? "sonnet-live"), {
       headers: {
         "content-type": "text/event-stream; charset=utf-8",
@@ -464,7 +474,9 @@ test("an all-empty shelf set errors the request without a provider success", asy
   await withStepDownGateway(shelf(), async () => {
     const result = await runStepDownPipeline(REQUESTED_MODEL);
     assert.ok(result.failure);
-    assert.equal(result.fetchCalls.length, 0);
+    // The harness's only fetch is the core gateway route lookup; the upstream
+    // walk must never start when every class is empty.
+    assert.equal(result.fetchCalls.some((call) => call.url.endsWith("/v1/messages")), false);
   });
 });
 
@@ -517,7 +529,9 @@ test("every row refusing keeps the last refusal without a lower-class success", 
       assert.equal(error, undefined);
       assert.equal(fetchCalls.length, 2);
       assert.equal(result.response.status, 429);
-      assert.equal(result.failedAttempts.length, 2);
+      // The last refusal is returned as the response, so only the earlier leg
+      // lands in failedAttempts.
+      assert.equal(result.failedAttempts.length, 1);
     }
   );
 });
@@ -540,11 +554,13 @@ test("independent requests rebuild the list with a fresh request-local sent set"
   await withStepDownGateway(
     shelf({ sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }] }),
     async () => {
+      // A 402 rotates the credential through the request-local sent set but
+      // writes no bench row, so the next request can try it again.
       const { error: firstError, fetchCalls: firstCalls, result: firstResult } = await runClassExecutor(
         executorConfig([twinSonnetSpec()]),
         {
           responses: [
-            new Response("{}", { headers: { "content-type": "application/json" }, status: 429 }),
+            new Response("{}", { headers: { "content-type": "application/json" }, status: 402 }),
             new Response("{}", { headers: { "content-type": "application/json" }, status: 200 })
           ]
         }

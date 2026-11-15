@@ -157,6 +157,22 @@ export type GatewayMediaProtocol =
 
 export type GatewayProviderCapabilityProtocol = GatewayProviderProtocol | GatewayMediaProtocol;
 
+// One current step-down swap record shared by core, Electron, and the UI
+// (FALL-02). Values are operator-display strings; no credential secret, request
+// body, or provider error text belongs here.
+export type SwapNoticeClass = "fable" | "opus" | "sonnet" | "haiku";
+
+export type SwapNotice = {
+  credentialLabel: string;
+  model: string;
+  provider: string;
+  reason: string;
+  requestedClass: SwapNoticeClass;
+  safeguardsApplies: boolean;
+  servedClass: SwapNoticeClass;
+  sinceAt: string;
+};
+
 export type GatewayProviderConfig = {
   account?: ProviderAccountConfig;
   api_base_url?: string;

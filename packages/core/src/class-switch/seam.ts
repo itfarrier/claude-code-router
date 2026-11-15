@@ -5,9 +5,10 @@ import {
   startClassSwitchCatalog,
   stopClassSwitchCatalog
 } from "@ccr/core/class-switch/catalog";
+import { clearSwapNotice } from "@ccr/core/class-switch/notice";
 import { loadAppConfig } from "@ccr/core/config/config";
 import {
-  attemptsForClass,
+  attemptsForStepDown,
   liftToolResultImages,
   parseClassRequest,
   rememberedCredential,
@@ -192,6 +193,7 @@ export function start(config: AppConfig): void {
 export function stop(): void {
   stopClassSwitchCatalog();
   stopBench();
+  clearSwapNotice();
 }
 
 export { recordClassRefusal } from "@ccr/core/class-switch/bench";
@@ -237,7 +239,7 @@ export function applyShelf(plan: RouteExecutionPlan, input: RouteExecutionPlanIn
   if (!parsed) {
     return plan;
   }
-  const attempts = attemptsForClass(parsed, input.modelRegistry, {
+  const attempts = attemptsForStepDown(parsed, input.modelRegistry, {
     estimatedTokens: input.estimatedTokens ?? 0,
     hasImage: input.hasImage ?? false,
     sessionId: input.sessionId,
@@ -245,7 +247,10 @@ export function applyShelf(plan: RouteExecutionPlan, input: RouteExecutionPlanIn
     toolTurn: input.toolTurn ?? false
   });
   if (!attempts) {
-    return plan;
+    // Every eligible class is exhausted: the parent executor's existing
+    // empty-list UpstreamRequestError is the terminal error. No parent
+    // model-chain or unrelated provider route may serve instead.
+    return { ...plan, attempts: [] };
   }
   return { ...plan, attempts };
 }
