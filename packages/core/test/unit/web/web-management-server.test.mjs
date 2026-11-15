@@ -144,6 +144,178 @@ test("startGateway reuses an already healthy CCR gateway on the configured port"
 // fresh store persists) the app config, and the startGateway case above saves
 // a revisionless createDefaultAppConfig() that only succeeds against a
 // not-yet-persisted config row.
+// An adopted runtime is the notice source of truth: the local UI's
+// getSwapNotice proxies the executing runtime's record through the
+// authenticated runtime channel and reconciles with it. The "external
+// runtime" here is the mock gateway process plus a real class-switch record
+// produced in this process by the real planner + notice seam; the mock's
+// /__ccr/runtime/swap-notice route serves the same seam read the fork's
+// notice-runtime plugin serves.
+test("an adopted runtime's swap notice reaches the local UI and reconciles", async () => {
+  const { loadAppConfig, saveAppConfig } = await import("@ccr/core/config/config.ts");
+  const { createDefaultAppConfig } = await import("@ccr/core/config/default-config.ts");
+  const { writeShelfSnapshot } = await import("@ccr/core/class-switch/catalog.ts");
+  const { recordStepDownSuccessFromTarget } = await import("@ccr/core/class-switch/seam.ts");
+  const { createRouteExecutionPlan } = await import("@ccr/core/routing/execution-plan.ts");
+  const { ModelRegistry } = await import("@ccr/core/routing/model-registry.ts");
+  const { gatewayService } = await import("@ccr/core/gateway/service.ts");
+  const { startWebManagementServer } = await import("@ccr/core/web/management-server.ts");
+  const { setThinShareCounter } = await import("@ccr/core/class-switch/plan.ts");
+  const { getSwapNotice } = await import("@ccr/core/class-switch/seam.ts");
+  const { gatewayRuntimeConfigRevision } = await import("@ccr/core/gateway/runtime-config-control.ts");
+
+  await gatewayService.stop();
+  setThinShareCounter(0);
+  const gatewayPort = await findAvailablePort();
+  const webAuthToken = "test-web-auth-token";
+  // Carry the current persisted revision: earlier tests in this file already
+  // saved a config row, so a fresh default would hit the conflict guard.
+  const currentConfig = await loadAppConfig();
+  const baseConfig = currentConfig ?? createDefaultAppConfig();
+  const config = {
+    ...baseConfig,
+    Providers: [{
+      api_base_url: "https://upstream.example/v1",
+      api_key: "test-provider-key",
+      capabilities: [{ type: "anthropic_messages" }],
+      credentials: [{ api_key: "sk-provider-secret", id: "cred:sonnet" }],
+      models: ["sonnet-live", "opus-live"],
+      name: "SonnetProvider",
+      type: "anthropic_messages"
+    }],
+    gateway: {
+      ...baseConfig.gateway,
+      corePort: await findAvailablePort(),
+      port: gatewayPort
+    }
+  };
+  const savedConfig = await saveAppConfig(config);
+
+  // The executing runtime's real step-down: an empty Opus shelf with one
+  // Sonnet row, planned through the real planner, recorded through the real
+  // notice seam.
+  const registry = new ModelRegistry({ Providers: savedConfig.Providers, virtualModelProfiles: [] });
+  await writeShelfSnapshot({
+    excluded: [],
+    review: [],
+    shelves: { fable: [], haiku: [], opus: [], sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }] },
+    updatedAt: new Date().toISOString()
+  });
+  const plan = createRouteExecutionPlan({
+    bodyModel: "claude-opus-4-6",
+    fallback: { mode: "off", models: [], retryCount: 0 },
+    hasRequestBody: true,
+    modelRegistry: registry,
+    primaryModel: "claude-opus-4-6"
+  });
+  const target = plan.attempts[0]?.target;
+  assert.ok(target);
+  const recorded = recordStepDownSuccessFromTarget({
+    credentialLabel: "cred:sonnet",
+    hadRequestedClassFailure: false,
+    requestedModel: "claude-opus-4-6",
+    target
+  });
+  assert.ok(recorded);
+
+  // The mock external gateway serves the swap-notice route the way the
+  // notice-runtime plugin does: an authenticated read of the executing
+  // runtime's own record through the real seam (with its own reconciliation).
+  const swapNoticeState = { current: recorded };
+  const externalGateway = createServer(async (request, response) => {
+    const url = new URL(request.url || "/", "http://127.0.0.1");
+    if (url.pathname === "/health") {
+      sendJson(response, 200, { core: "http://127.0.0.1:3457", status: "running", timestamp: new Date().toISOString() });
+      return;
+    }
+    if (url.pathname === "/") {
+      sendJson(response, 200, { core: "next-ai-gateway", endpoints: ["GET /v1/models"], name: "claude-code-router", plugin: "claude-code-router" });
+      return;
+    }
+    if (url.pathname === "/v1/models") {
+      if (request.headers.authorization !== `Bearer ${savedConfig.APIKEY}`) {
+        sendJson(response, 401, { error: { message: "Invalid API key." } });
+        return;
+      }
+      sendJson(response, 200, { data: [{ id: "sonnet-live", object: "model" }], object: "list" });
+      return;
+    }
+    if (url.pathname === "/__ccr/runtime/config") {
+      if (request.headers.authorization !== `Bearer ${savedConfig.APIKEY}`) {
+        sendJson(response, 401, { error: { message: "Invalid API key." } });
+        return;
+      }
+      sendJson(response, 200, { revision: gatewayRuntimeConfigRevision(savedConfig), state: "running" });
+      return;
+    }
+    if (url.pathname === "/__ccr/runtime/swap-notice") {
+      if (request.headers.authorization !== `Bearer ${savedConfig.APIKEY}`) {
+        sendJson(response, 401, { error: { message: "Invalid API key." } });
+        return;
+      }
+      const readNotice = await getSwapNotice();
+      swapNoticeState.current = readNotice;
+      sendJson(response, 200, { notice: readNotice });
+      return;
+    }
+    sendJson(response, 404, { error: { message: "Not found." } });
+  });
+  await listen(externalGateway, gatewayPort);
+  const runtime = await startWebManagementServer({
+    authToken: webAuthToken,
+    host: "127.0.0.1",
+    port: 0,
+    startGateway: false
+  });
+
+  try {
+    const start = await rpc(runtime.url, webAuthToken, "startGateway");
+    assert.equal(start.ok, true);
+    assert.equal(start.value.state, "running", start.value.lastError);
+    assert.equal(start.value.gatewayManagedExternally, true);
+
+    // The local UI's getSwapNotice returns the executing runtime's record
+    // through the adopted channel and mirrors it into the local projection.
+    const populated = await rpc(runtime.url, webAuthToken, "getSwapNotice");
+    assert.equal(populated.ok, true);
+    assert.ok(populated.value);
+    assert.equal(populated.value.requestedClass, "opus");
+    assert.equal(populated.value.servedClass, "sonnet");
+    assert.equal(populated.value.model, "sonnet-live");
+    assert.equal(populated.value.provider, "SonnetProvider");
+    assert.equal(populated.value.credentialLabel, "cred:sonnet");
+
+    // The executing runtime reconciles its own record (the Opus class has a
+    // live triple again) → the next adopted read clears the local projection.
+    await writeShelfSnapshot({
+      excluded: [],
+      review: [],
+      shelves: {
+        fable: [],
+        haiku: [],
+        opus: [{ model: "opus-live", provider: "SonnetProvider", score: 55 }],
+        sonnet: [{ model: "sonnet-live", provider: "SonnetProvider", score: 35 }]
+      },
+      updatedAt: new Date().toISOString()
+    });
+    const reconciled = await rpc(runtime.url, webAuthToken, "getSwapNotice");
+    assert.equal(reconciled.ok, true);
+    assert.equal(reconciled.value, null);
+  } finally {
+    // The empty shelf snapshot is this file's baseline: later tests record a
+    // notice and rely on the requested class staying not-live.
+    await writeShelfSnapshot({
+      excluded: [],
+      review: [],
+      shelves: { fable: [], haiku: [], opus: [], sonnet: [] },
+      updatedAt: new Date().toISOString()
+    });
+    await runtime.close();
+    await gatewayService.stop();
+    await closeServer(externalGateway);
+  }
+});
+
 test("authenticated web RPC returns the current swap notice", async () => {
   const { startWebManagementServer } = await import("@ccr/core/web/management-server.ts");
   const { clearSwapNotice, recordSwapNotice } = await import("@ccr/core/class-switch/notice.ts");

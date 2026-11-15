@@ -13,7 +13,7 @@ import { mediaToolsMcpServer } from "@ccr/core/mcp/grok-media-config";
 import { resolveGatewayPublicModelId } from "@ccr/core/gateway/features/model-discovery";
 import { activeProviderCredentials, inferProtocol, normalizedProviderCapabilities, normalizeProviderProtocol, providerCapabilityForClientProtocol, providerCapabilityInternalName, providerCapabilityNameMatches, providerCredentialInternalName, providerProtocolForClientProtocol, sortProviderCredentialsForConfig, toCoreGatewayProviders } from "@ccr/core/providers/runtime-topology";
 import { buildRawTraceConfig } from "@ccr/core/observability/raw-trace-sync";
-import { endpoint, gatewayRuntimeSupportsRouterPlugin, resolveLocalAgentAuthProviderHookEntry, resolveRouterPluginEntry, resolveUndiciProxyAgentModule, resolveUpstreamHeaderSanitizerEntry, writeGatewayProxyPreloadFile } from "@ccr/core/gateway/core-runtime/supervisor";
+import { endpoint, gatewayRuntimeSupportsRouterPlugin, resolveClassSwitchNoticeRuntimeEntry, resolveLocalAgentAuthProviderHookEntry, resolveRouterPluginEntry, resolveUndiciProxyAgentModule, resolveUpstreamHeaderSanitizerEntry, writeGatewayProxyPreloadFile } from "@ccr/core/gateway/core-runtime/supervisor";
 import { billingUsageSyncHeader, billingUsageSyncPath, claudeCodeOauthBetaHeader, claudeCodeOauthRequiredBeta, coreGatewayAuthHeader, coreGatewayAuthTokenEnv } from "@ccr/core/gateway/internal/shared";
 import type { BrowserWebSearchMcpIntegration, CoreGatewayProvider } from "@ccr/core/gateway/internal/shared";
 import { uniqueStrings } from "@ccr/core/gateway/internal/collections";
@@ -25,10 +25,12 @@ import { resolveConfiguredProviderModelSelector, resolveUniqueConfiguredProvider
 
 const upstreamHeaderSanitizerPluginKey = "ccr-upstream-header-sanitizer";
 const localAgentAuthProviderHookPluginKey = "ccr-local-agent-auth-provider-hooks";
+const classSwitchSwapNoticeRuntimePluginKey = "ccr-class-switch-swap-notice";
 const internalGatewayPluginKeys = [
   ccrRouterPluginKey,
   localAgentAuthProviderHookPluginKey,
-  upstreamHeaderSanitizerPluginKey
+  upstreamHeaderSanitizerPluginKey,
+  classSwitchSwapNoticeRuntimePluginKey
 ];
 export const unlimitedVirtualModelToolCalls = Number.MAX_SAFE_INTEGER;
 export const unlimitedVirtualModelToolTurns = Number.MAX_SAFE_INTEGER;
@@ -104,6 +106,20 @@ export async function compileCoreGatewayConfig(
   ];
   const routerPlugin = routerPluginConfig(config, options, coreAuthToken);
   const localAgentAuthProviderHookPlugin = localAgentAuthProviderHookPluginConfig(providerPluginsWithCapabilityAliases);
+  // The class-switch swap-notice runtime plugin serves one authenticated read
+  // of the executing runtime's notice record (CR-05). It carries the compiled
+  // app config only so the route can build the model registry for
+  // reconciliation; its payload is the scalar-only SwapNotice.
+  const classSwitchSwapNoticeRuntimePlugin = process.env.CCR_CLASS_SWITCH === "0"
+    ? undefined
+    : gatewayRuntimeSupportsRouterPlugin()
+      ? {
+          config: { appConfig: config },
+          enabled: true,
+          key: classSwitchSwapNoticeRuntimePluginKey,
+          modulePath: resolveClassSwitchNoticeRuntimeEntry()
+        }
+      : undefined;
   const pluginAgentConfig = isRecord(pluginCoreGatewayConfig.agent) ? pluginCoreGatewayConfig.agent : {};
   const pluginMcpServers = Array.isArray(pluginAgentConfig.mcpServers) ? pluginAgentConfig.mcpServers : [];
   const externalMcpServers = [
@@ -162,6 +178,7 @@ export async function compileCoreGatewayConfig(
       ...(routerPlugin ? [routerPlugin] : []),
       ...configuredGatewayPlugins,
       ...(localAgentAuthProviderHookPlugin ? [localAgentAuthProviderHookPlugin] : []),
+      ...(classSwitchSwapNoticeRuntimePlugin ? [classSwitchSwapNoticeRuntimePlugin] : []),
       {
         enabled: true,
         key: upstreamHeaderSanitizerPluginKey,

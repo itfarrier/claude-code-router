@@ -325,6 +325,7 @@ export function createMainBuildOptions({ mode = "production", plugins = [] } = {
       path.join(coreSourceRoot, "routing", "route-script-worker.ts"),
       localAgentAuthProviderHookInput,
       routerPluginInput,
+      path.join(coreSourceRoot, "class-switch", "notice-runtime.ts"),
       upstreamHeaderSanitizerInput,
       electronUndiciProxyAgentInput,
       path.join(electronSourceRoot, "main", "preload.ts")
@@ -360,6 +361,7 @@ export function createCliBuildOptions({ mode = "production", plugins = [] } = {}
       path.join(coreSourceRoot, "routing", "route-script-worker.ts"),
       localAgentAuthProviderHookInput,
       routerPluginInput,
+      path.join(coreSourceRoot, "class-switch", "notice-runtime.ts"),
       upstreamHeaderSanitizerInput
     ],
     external: nodeExternals.filter((moduleName) => moduleName !== "electron"),
@@ -392,6 +394,7 @@ export function createCoreServerBuildOptions({ mode = "production", plugins = []
       path.join(coreSourceRoot, "routing", "route-script-worker.ts"),
       localAgentAuthProviderHookInput,
       routerPluginInput,
+      path.join(coreSourceRoot, "class-switch", "notice-runtime.ts"),
       upstreamHeaderSanitizerInput
     ],
     external: nodeExternals.filter((moduleName) => moduleName !== "electron"),
