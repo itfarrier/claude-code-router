@@ -78,33 +78,33 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONFIG-01 | — | Pending |
-| CONFIG-02 | — | Pending |
-| CONFIG-03 | — | Pending |
-| CONFIG-04 | — | Pending |
-| SOCKS-01 | — | Pending |
-| SOCKS-02 | — | Pending |
-| SOCKS-03 | — | Pending |
-| SOCKS-04 | — | Pending |
-| EGRESS-01 | — | Pending |
-| EGRESS-02 | — | Pending |
-| EGRESS-03 | — | Pending |
-| EGRESS-04 | — | Pending |
-| TRACE-01 | — | Pending |
-| TRACE-02 | — | Pending |
-| TRACE-03 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
-| UI-03 | — | Pending |
-| COMPAT-01 | — | Pending |
-| COMPAT-02 | — | Pending |
-| COMPAT-03 | — | Pending |
+| CONFIG-01 | Phase 4 | Pending |
+| CONFIG-02 | Phase 4 | Pending |
+| CONFIG-03 | Phase 4 | Pending |
+| CONFIG-04 | Phase 4 | Pending |
+| SOCKS-01 | Phase 4 | Pending |
+| SOCKS-02 | Phase 4 | Pending |
+| SOCKS-03 | Phase 4 | Pending |
+| SOCKS-04 | Phase 4 | Pending |
+| EGRESS-01 | Phase 5 | Pending |
+| EGRESS-02 | Phase 5 | Pending |
+| EGRESS-03 | Phase 5 | Pending |
+| EGRESS-04 | Phase 5 | Pending |
+| TRACE-01 | Phase 5 | Pending |
+| TRACE-02 | Phase 5 | Pending |
+| TRACE-03 | Phase 5 | Pending |
+| UI-01 | Phase 6 | Pending |
+| UI-02 | Phase 6 | Pending |
+| UI-03 | Phase 6 | Pending |
+| COMPAT-01 | Phase 4 | Pending |
+| COMPAT-02 | Phase 6 | Pending |
+| COMPAT-03 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21 ⚠️
+- Mapped to phases: 21
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-11-16*
-*Last updated: 2026-11-16 after initial definition*
+*Last updated: 2026-11-16 after v1.1 roadmap creation*
