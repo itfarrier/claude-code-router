@@ -59,7 +59,9 @@ test("OpenAI-shaped gateway models add only top-level context window fields", ()
   assert.ok(model);
   assert.equal(model.context_window, 272_000);
   assert.equal(model.max_context_window, 272_000);
-  assert.equal(model.max_input_tokens, undefined);
+  // Upstream v3.1.5 natively emits max_input_tokens on the OpenAI-compatible
+  // list; the fork's guarantee stays "top-level only, never nested".
+  assert.equal(model.max_input_tokens, 272_000);
   assert.equal(model.capabilities, undefined);
 });
 
@@ -77,7 +79,7 @@ test("Claude user-agent fills nested max_input_tokens when capabilities already 
   assert.equal(model.capabilities.context_management.max_input_tokens, 272_000);
 });
 
-test("unknown context window does not add context_window fields", () => {
+test("unknown context window adds no invented window", () => {
   const config = gatewayConfig({
     provider: {
       models: ["no-window"],
@@ -85,12 +87,14 @@ test("unknown context window does not add context_window fields", () => {
     }
   });
   const model = createClaudeCodeModelsResponse(config).data[0];
-  assert.equal(model.context_window, undefined);
-  assert.equal(model.max_context_window, undefined);
+  // Upstream v3.1.5 emits its fields unconditionally (0 for an unknown model);
+  // the fork's guarantee is that no window is invented for an unknown model.
+  assert.ok(!model.context_window);
+  assert.ok(!model.max_context_window);
   assert.notEqual(model.context_window, 200_000);
 });
 
-test("CCR_CLASS_SWITCH=0 leaves models response without new context window fields", () => {
+test("CCR_CLASS_SWITCH=0 keeps the models response at parent behavior including native context fields", () => {
   const previous = process.env.CCR_CLASS_SWITCH;
   const config = gatewayConfig({
     provider: {
@@ -102,8 +106,10 @@ test("CCR_CLASS_SWITCH=0 leaves models response without new context window field
   try {
     process.env.CCR_CLASS_SWITCH = "0";
     const model = createClaudeCodeModelsResponse(config).data[0];
-    assert.equal(model.context_window, undefined);
-    assert.equal(model.max_context_window, undefined);
+    // Upstream v3.1.5 natively emits these fields from modelMetadata; with the
+    // kill switch on, the fork's seam must return that response untouched.
+    assert.equal(model.context_window, 272_000);
+    assert.equal(model.max_context_window, 272_000);
   } finally {
     if (previous === undefined) {
       delete process.env.CCR_CLASS_SWITCH;
