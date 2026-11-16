@@ -1,28 +1,12 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v1.0",
-  "phases": [
-    {
-      "number": "1",
-      "name": "Shelves",
-      "status": "complete"
-    },
-    {
-      "number": "2",
-      "name": "Live choice",
-      "status": "complete"
-    },
-    {
-      "number": "3",
-      "name": "Step-down",
-      "status": "complete"
-    }
-  ],
+  "milestone": "v1.1",
+  "phases": [],
   "next": {
-    "command": "$gsd-progress",
-    "label": "Show progress",
-    "reason": "Unsure of state — showing progress"
+    "command": "$gsd-discuss-phase",
+    "label": "Discuss the first phase",
+    "reason": "Project initialized — plan your first phase"
   },
-  "updated_at": "2026-11-15T14:14:50.469Z"
+  "updated_at": "2026-11-16T15:48:35.381Z"
 }
