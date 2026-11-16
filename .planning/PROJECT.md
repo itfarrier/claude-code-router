@@ -8,16 +8,16 @@ Claude Code Router (CCR) is a local control plane for coding agents. Agents keep
 
 Claude Code orders a class. CCR serves the strongest live model in that class, and Claude does not fail when that class is empty.
 
-## Current Milestone: v1.0 Automatic class switch
+## Current Milestone: v1.1 Per-provider SOCKS5 proxies
 
-**Goal:** When Claude Code asks for Fable, Opus, Sonnet, or Haiku, CCR serves the strongest live provider, token, and model on that shelf, steps down one class only when the shelf is empty, and tells the user about the swap.
+**Goal:** Each provider can declare its own SOCKS5 proxy or direct egress; provider-bound outbound traffic follows it, and providers without their own setting keep the global upstream proxy unchanged.
 
 **Target features:**
-- Four shelves that match Claude Code class names, filled by a public benchmark score or by a tier word in the model id
-- Choice of the strongest live triple (provider + token + model), with token rotation and a retry before the first token
-- A bench that parks failures until the provider's own reset time
-- A background catalog refresh and a probe that does not burn quota when the provider already says the model is fine
-- A transparent step-down: Claude still sees the name it asked for, and the user sees one notice
+- A per-provider proxy setting on the provider config entry (config file + provider editor in the UI): a `socks5://` or `socks5h://` URL with username/password auth, or `direct`
+- Native SOCKS5 dispatch in the core fetch path, with DNS resolved at the proxy (socks5h semantics) — today `parseProxyServerEndpoint` rejects `socks://` and undici speaks HTTP-CONNECT only
+- Provider-bound egress follows the provider's own proxy: router upstream attempts, the per-provider model catalog/probe refresh, and provider token/account endpoints
+- Fallback chain: provider proxy → explicit `direct` → global `proxy.upstream` → env proxy → system proxy. A provider without the setting behaves exactly as today
+- The proxy decision for a request is observable in the existing route trace / request log
 
 ## Requirements
 
@@ -36,7 +36,11 @@ Claude Code orders a class. CCR serves the strongest live model in that class, a
 
 ### Active
 
-- (none — all v1.0 milestone requirements validated)
+- [ ] Each provider entry can declare its own socks5/socks5h proxy URL with auth, or direct egress
+- [ ] Provider-bound egress (attempts, catalog/probe, token endpoints) resolves through the provider's own proxy
+- [ ] Native SOCKS5 dispatch with DNS at the proxy replaces the local HTTP-CONNECT shim workaround
+- [ ] The provider editor UI exposes the per-provider proxy setting
+- [ ] The chosen proxy per request is visible in the route trace / request log
 
 ### Out of Scope
 
@@ -48,12 +52,19 @@ Claude Code orders a class. CCR serves the strongest live model in that class, a
 - Non-text models and `:batch` models on the shelves — embeddings, OCR, speech, and images stay off
 - Ranking by price or parameter count — the exam is the benchmark score
 - A backport bot for the parent repo — stay on this fork and keep parent merges possible
+- socks4 support — the stack has no socks4 endpoint; socks5/socks5h only
+- A proxy per credential or per model inside one provider — the provider entry is the unit
+- Non-provider egress (media, plugins, MCP discovery, hosted web-search) — stays on the global upstream proxy
+- A new standalone proxy UI screen — one field group in the existing provider editor
+- A proxy health monitor or latency ranking of proxies — the operator picks the proxy per provider
 
 ## Context
 
-This milestone comes from Cursor chat `9cf95ff9-5d84-4b2b-adf4-165be1f6ff9b`. The locked product rules are in `.planning/research/IMPORTED-DESIGN.md`. The locked way to place that code, so this fork can take updates from `musistudio/claude-code-router`, is in `.planning/research/FORK-SEAMS.md`. Domain research was not run again. The chat already compared this fork, freellm, and zerogateway, and it reviewed the parent GitHub issues and pull requests.
+This milestone comes from opencode session `ses_e20334c28ffeM6i21SDXZ2b0Mn` (2026-11-15/16) and the stack notes in `~/.claude-code-router/README.md` and `PROGRESS.md`. The locked v1.0 rules are in `.planning/research/IMPORTED-DESIGN.md` and `.planning/research/FORK-SEAMS.md`.
 
-The product version on `package.json` is 3.1.3. That is not the GSD milestone version. This is the first GSD milestone, so it is v1.0.
+**Egress history:** every CCR provider egresses through ONE SOCKS5 proxy (exit Gdynia PL) via a local HTTP-CONNECT shim (`~/bin/socks-http-shim.py`, port 8899) — CCR's undici rejects `socks://` URLs and speaks HTTP-CONNECT only. A NO_PROXY split-egress experiment (2026-11-13) was REVERTED: direct egress broke intermittently because `api.z.ai` advertises AAAA records and the local IPv6 route is dead. groq, modelscope, and cursor require the PL tunnel (BY-IP blocks); the rest tolerate it. Per-provider socks5h (DNS at the proxy) removes both the shim and the fragile hostname split.
+
+The product version on `package.json` is 3.1.3. That is not the GSD milestone version. GSD milestones: v1.0 shipped 2026-11-15; this is v1.1. Phase numbers continue from 4.
 
 Upstream notes that the implementation must respect:
 
@@ -70,17 +81,19 @@ Config mode is `yolo`. Granularity is `coarse`. Phase numbers start at 1 because
 
 ## Constraints
 
-- **Codebase**: Put class, score, bench, catalog, and notice code in `packages/core/src/class-switch/`. Touch a parent file only through a seam in `.planning/research/FORK-SEAMS.md`. Leave `credential-pool.ts`, `profiles/service.ts`, and `config.ts` unchanged.
-- **Parent**: The git parent is `musistudio/claude-code-router`. Merge by taking the parent's request loop whole. `CCR_CLASS_SWITCH=0` must match parent behavior.
+- **Codebase**: New proxy code lives in a new `packages/core/src/` directory (name set by the phase plan). Parent files get seam calls only, in the FORK-SEAMS way. Do not rewrite the request loop, `credential-pool.ts`, or the Claude settings door. `fetchWithSystemProxy` semantics for providers without a per-provider setting must not change.
+- **Parent**: The git parent is `musistudio/claude-code-router`. Merge by taking the parent's request loop whole. A kill switch in the FORK-SEAMS style must make the fork match parent behavior.
 - **Runtime**: Node `>=22`. Domain code stays in `packages/core`. The UI talks only through `window.ccr`.
-- **Claude identity**: The response body keeps the model name Claude sent. The picker in Claude still shows that name.
-- **Policy input**: Model name, tool list, and whether the request has an image. Not the message body.
-- **Door**: Do not regress the existing Claude settings rewrite.
+- **Socks**: `socks5://` and `socks5h://` with username/password auth. DNS resolves at the proxy. No socks4.
+- **Operations (user rules for this milestone)**: If CCR is run during implementation for a check, kill it and every related process/thread afterwards — nothing stays in memory. Run all helper processes at the lowest priority. Every system setting changed during work is written down with how to revert it.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
+| Per-provider proxy declared on the provider config entry; the global upstream proxy stays the default | The operator picks per provider; an entry without the field behaves exactly as today | — Pending |
+| socks5 + socks5h with auth, DNS resolved at the proxy | The 2026-11-13 NO_PROXY revert showed local DNS and dead IPv6 routes break direct egress; socks5h resolves at the proxy | — Pending |
+| Config file + provider editor UI field | CLI, desktop, and Docker users all configure providers today; both surfaces | — Pending |
 | Four classes: Fable, Opus, Sonnet, Haiku | They match Claude Code aliases. The user confirmed this split. | ✓ Shipped Phase 1 (shelf matching) |
 | Score weights 0.50 / 0.30 / 0.20 and cuts 62 / 50 / 28 | Locked in the imported chat. Coding index, then agentic index, then intelligence index, from OpenRouter `benchmarks.artificial_analysis`. | ✓ Shipped Phase 1 (catalog scoring) |
 | Dynamic attempt list at the end of `createRouteExecutionPlan`, not a second loop | The parent `fetchUpstreamWithFallback` already walks `attempts`. A class request replaces that list. Other requests keep `off`, `retry`, and `model-chain`. See `.planning/research/FORK-SEAMS.md`. | ✓ Shipped Phase 2 (live triple walk) |
@@ -108,4 +121,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-15 after v1.0 milestone*
+*Last updated: 2026-11-16 after v1.1 milestone start (per-provider SOCKS5 proxies)*
