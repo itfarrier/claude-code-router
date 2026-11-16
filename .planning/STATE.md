@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-11-16)
 Phase: 4 of 6 (Config and transport foundation)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-11-16 — Roadmap created for milestone v1.1 (Phases 4-6, 21/21 requirements mapped)
+Last activity: 2026-11-16 — Upstream v3.1.5 rebased in; roadmap created for milestone v1.1 (Phases 4-6, 21/21 requirements mapped)
 
 Progress: [░░░░░░░░░░] 0% (v1.1: 0/3 phases complete)
 
@@ -80,6 +80,8 @@ Recent decisions affecting current work:
 - Bench time comes from the provider response. Catalog refresh stays at 10 minutes. `CCR_CLASS_SWITCH=0` matches parent behavior.
 - Chat `c398a042-f199-48a6-afb9-9480889e3f22` gaps are now in the v1 requirements and phase criteria: weight renormalization, tier words `fable`/`astra`, `opus`/`sol`, `sonnet`/`terra`, `haiku`/`luna`, bench scope, unchecked model below a confirmed one, `safeguards` on the notice, `tool_result` images, and the real `/v1/models` window.
 - PR #1179 stays superseded by `.planning/research/FORK-SEAMS.md`. TUNE-01 and TUNE-02 are out of scope. They were not in the source chat.
+- [2026-11-16 rebase]: upstream v3.1.5 integrated into auto-class-switch (50 commits, 2 test-file conflicts resolved, full core suite green). `proxy/` and the locked `undici@7.29.0` are unchanged upstream — the v1.1 research basis holds. Upstream now natively emits model-list context fields (`context_window`/`max_context_window`/`max_input_tokens`); the fork `applyContextWindows` seam still adds OpenRouter/catalog windows; the kill-switch contract is now "parent response untouched", and the three Phase-01 context-window tests were realigned. The gateway child preload is unified (proxy + timeout); a caller-provided fetch dispatcher passes through it by contract — the per-provider dispatcher approach composes.
+- [2026-11-16 rebase]: upstream `provider-secrets.ts` redacts web-RPC credentials by key name and does NOT mask a per-provider proxy value — v1.1 must extend it (TRACE-03, UI-01, CONFIG round-trip). Upstream flake: `raw trace ACK measures only the newly admitted bundle after startup indexing` is timing-sensitive (fails under CPU starvation, passes full runs); fork never touched that code. Typecheck baseline stays 14 pre-existing errors, zero new from the rebase.
 - [Phase 01-shelves]: Score helpers ship in RED so tracer asserts 50.3375 before applyShelf opens shelf
 - [Phase 01-shelves]: Batch and non-text run before score; tier distance > 1 is review not shelf
 - [Phase 01-shelves]: Catalog walk stays separate from provider auto-refresh timers

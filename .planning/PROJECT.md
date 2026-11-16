@@ -64,7 +64,18 @@ This milestone comes from opencode session `ses_e20334c28ffeM6i21SDXZ2b0Mn` (202
 
 **Egress history:** every CCR provider egresses through ONE SOCKS5 proxy (exit Gdynia PL) via a local HTTP-CONNECT shim (`~/bin/socks-http-shim.py`, port 8899) — CCR's undici rejects `socks://` URLs and speaks HTTP-CONNECT only. A NO_PROXY split-egress experiment (2026-11-13) was REVERTED: direct egress broke intermittently because `api.z.ai` advertises AAAA records and the local IPv6 route is dead. groq, modelscope, and cursor require the PL tunnel (BY-IP blocks); the rest tolerate it. Per-provider socks5h (DNS at the proxy) removes both the shim and the fragile hostname split.
 
-The product version on `package.json` is 3.1.3. That is not the GSD milestone version. GSD milestones: v1.0 shipped 2026-11-15; this is v1.1. Phase numbers continue from 4.
+**Upstream v3.1.5 integration (rebased 2026-11-16):** `main` was integrated into `auto-class-switch` by rebase (50 upstream commits; 2 test-file conflicts resolved; full core suite green; typecheck at the documented 14-error baseline). Facts that shape v1.1:
+
+- `packages/core/src/proxy/` and the locked `undici@7.29.0` are unchanged upstream — the v1.1 research basis holds.
+- The gateway child preload is now ONE unified fetch preload (`gateway-proxy-preload.cjs`) serving both `CCR_UPSTREAM_PROXY_URL` (ProxyAgent) and `CCR_UPSTREAM_TIMEOUT_MS` (headersTimeout/bodyTimeout plus a direct Agent when no proxy). Its documented contract: a fetch call that already carries a caller-provided dispatcher keeps it — so the per-provider dispatcher approach composes with the preload by design.
+- Upstream now natively emits top-level `context_window` / `max_context_window` / `max_input_tokens` on the gateway model lists from `modelMetadata` and the catalog. The fork's `applyContextWindows` seam still adds OpenRouter-snapshot and catalog windows on top. Three Phase-01 context-window tests were realigned; the kill-switch test now asserts the seam returns the parent response (native fields included) untouched.
+- Upstream added web-RPC credential redaction (`packages/core/src/web/provider-secrets.ts` — `[CCR REDACTED]` placeholders, restored on save). It redacts by key name (`apikey`, `password`, `token`, …) and does NOT cover a per-provider proxy value — v1.1 must extend it for proxy credentials (TRACE-03, UI-01, CONFIG round-trip).
+- Per-provider config fields have fresh upstream precedent (`forwardThinkingParameters`, `supportsDeferredTools` on the provider entry).
+- Upstream's header sanitizer now strips client cookies, `cf-*`, `cdn-loop`, and `true-client-ip` from provider requests — client proxy metadata never crosses to a provider.
+- Known upstream flake: `raw trace ACK measures only the newly admitted bundle after startup indexing` (`raw-trace-sync.test.mjs`) — timing-sensitive, fails under CPU starvation, passes in a full run; the fork never touched that code. No fix on the fork side.
+- FORK-SEAMS.md is the v1.0-locked seam list. The v1.1 seam plan (new `packages/core/src/` directory, seam-call allowlist, kill switch `CCR_PROVIDER_PROXY=0`) is defined at plan-phase, in the same discipline.
+
+The product version on `package.json` is 3.1.5 after the rebase. That is not the GSD milestone version. GSD milestones: v1.0 shipped 2026-11-15; this is v1.1. Phase numbers continue from 4.
 
 Upstream notes that the implementation must respect:
 
@@ -91,6 +102,7 @@ Config mode is `yolo`. Granularity is `coarse`. Phase numbers start at 1 because
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
+| Upstream v3.1.5 natively ships top-level context-window fields on the model lists; the fork seam keeps enriching with OpenRouter/catalog windows | The parent emits from `modelMetadata` + catalog; the fork's snapshot windows still cover models the parent leaves bare. Kill-switch contract now reads "off = parent response untouched", not "off = no context fields". | ✓ Good (rebase 2026-11-16, tests realigned) |
 | Per-provider proxy declared on the provider config entry; the global upstream proxy stays the default | The operator picks per provider; an entry without the field behaves exactly as today | — Pending |
 | socks5 + socks5h with auth, DNS resolved at the proxy | The 2026-11-13 NO_PROXY revert showed local DNS and dead IPv6 routes break direct egress; socks5h resolves at the proxy | — Pending |
 | Config file + provider editor UI field | CLI, desktop, and Docker users all configure providers today; both surfaces | — Pending |
@@ -121,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-16 after v1.1 milestone start (per-provider SOCKS5 proxies)*
+*Last updated: 2026-11-16 after the upstream v3.1.5 rebase (v1.1 planning context actualized)*
